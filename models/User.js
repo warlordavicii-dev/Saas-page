@@ -73,12 +73,21 @@ const User = {
       `SELECT * FROM users 
        WHERE email = ? 
        AND verify_token = ? 
-       AND verify_token_expires > NOW()
        LIMIT 1`,
       [email, code]
     );
 
-    return rows[0] || null;
+    const user = rows[0];
+    if (!user) return null;
+
+    // Compare against this server's clock rather than the DB server's clock —
+    // free/shared MySQL hosts often run clocks that drift or sit in a
+    // different timezone, which was causing fresh codes to read as expired.
+    if (!user.verify_token_expires || new Date(user.verify_token_expires).getTime() < Date.now()) {
+      return null;
+    }
+
+    return user;
   },
 
   async setVerifyToken(id, token, expires) {
@@ -118,12 +127,18 @@ const User = {
     const [rows] = await pool.query(
       `SELECT * FROM users 
        WHERE reset_token = ? 
-       AND reset_token_expires > NOW()
        LIMIT 1`,
       [token]
     );
 
-    return rows[0] || null;
+    const user = rows[0];
+    if (!user) return null;
+
+    if (!user.reset_token_expires || new Date(user.reset_token_expires).getTime() < Date.now()) {
+      return null;
+    }
+
+    return user;
   },
 
   async updatePassword(id, hashedPassword) {
