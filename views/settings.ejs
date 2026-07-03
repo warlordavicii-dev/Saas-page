@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <%- include('partials/head') %>
+</head>
+<body>
+  <div class="settings-wrap">
+    <div class="settings-header">
+      <%- include('partials/brand') %>
+      <form class="logout-form" method="POST" action="/logout">
+        <button class="btn btn-secondary" type="submit" style="width:auto;padding:9px 16px;">Log out</button>
+      </form>
+    </div>
+
+    <%- include('partials/flash') %>
+
+    <div class="panel">
+      <h2>Profile</h2>
+      <p class="desc">
+        Update your name and email.
+        <span class="badge <%= user.is_verified ? 'verified' : 'unverified' %>">
+          <%= user.is_verified ? '✓ verified' : '! unverified' %>
+        </span>
+      </p>
+      <form method="POST" action="/settings/profile">
+        <div class="field">
+          <label for="name">Full name</label>
+          <input type="text" id="name" name="name" value="<%= user.name %>" required>
+        </div>
+        <div class="field">
+          <label for="username">Username</label>
+          <input type="text" id="username" name="username" value="<%= user.username %>" minlength="3" maxlength="32" pattern="[a-zA-Z0-9_]+" required autocomplete="off">
+          <p class="hint" id="username-status"></p>
+        </div>
+        <div class="field">
+          <label for="email">Email</label>
+          <input type="email" id="email" name="email" value="<%= user.email %>" required>
+          <p class="hint">Changing your email will require re-verifying it, and you'll be logged out.</p>
+        </div>
+        <button class="btn btn-primary" type="submit">Save profile</button>
+      </form>
+    </div>
+
+    <script>
+      (function () {
+        const input = document.getElementById('username');
+        const status = document.getElementById('username-status');
+        const originalUsername = input.value.trim().toLowerCase();
+        let debounceTimer = null;
+
+        function setStatus(text, className) {
+          status.textContent = text;
+          status.className = 'hint ' + (className || '');
+        }
+
+        input.addEventListener('input', function () {
+          const value = input.value.trim();
+
+          if (!value || value.toLowerCase() === originalUsername) {
+            setStatus('', '');
+            return;
+          }
+          if (!/^[a-zA-Z0-9_]{3,32}$/.test(value)) {
+            setStatus('3-32 characters: letters, numbers, or underscores.', 'status-error');
+            return;
+          }
+
+          setStatus('Checking availability…', 'status-checking');
+          clearTimeout(debounceTimer);
+          debounceTimer = setTimeout(function () {
+            fetch('/check-username?username=' + encodeURIComponent(value))
+              .then(function (res) { return res.json(); })
+              .then(function (data) {
+                if (input.value.trim() !== value) return;
+                if (data.available) {
+                  setStatus('✓ Username is available', 'status-success');
+                } else {
+                  setStatus(data.reason || 'That username is taken.', 'status-error');
+                }
+              })
+              .catch(function () {
+                setStatus('Could not check right now.', 'status-error');
+              });
+          }, 400);
+        });
+      })();
+    </script>
+
+    <div class="panel">
+      <h2>Change password</h2>
+      <p class="desc">Choose a strong password you're not using elsewhere.</p>
+      <form method="POST" action="/settings/password">
+        <div class="field">
+          <label for="currentPassword">Current password</label>
+          <input type="password" id="currentPassword" name="currentPassword" required>
+        </div>
+        <div class="field">
+          <label for="newPassword">New password</label>
+          <input type="password" id="newPassword" name="newPassword" minlength="8" required>
+        </div>
+        <div class="field">
+          <label for="confirmPassword">Confirm new password</label>
+          <input type="password" id="confirmPassword" name="confirmPassword" minlength="8" required>
+        </div>
+        <button class="btn btn-primary" type="submit">Update password</button>
+      </form>
+    </div>
+  </div>
+</body>
+</html>
