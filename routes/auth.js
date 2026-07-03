@@ -73,6 +73,31 @@ router.get('/check-username', async (req, res) => {
 });
 
 // -----------------------------------------------------
+// PAGE RENDERS (GET)
+// -----------------------------------------------------
+
+router.get('/login', (req, res) => {
+  res.render('login', { title: 'Log in' });
+});
+
+router.get('/signup', (req, res) => {
+  res.render('signup', { title: 'Sign up' });
+});
+
+router.get('/verify-email', (req, res) => {
+  const email = req.query.email || req.session.pendingVerifyEmail || '';
+  res.render('verify-email', { title: 'Verify email', email });
+});
+
+router.get('/forgot-password', (req, res) => {
+  res.render('forgot-password', { title: 'Forgot password' });
+});
+
+router.get('/reset-password/:token', (req, res) => {
+  res.render('reset-password', { title: 'Reset password', token: req.params.token });
+});
+
+// -----------------------------------------------------
 // SIGNUP
 // -----------------------------------------------------
 
