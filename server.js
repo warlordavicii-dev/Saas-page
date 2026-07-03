@@ -42,7 +42,16 @@ app.use((req, res, next) => {
 app.use(attachUser);
 
 app.get('/', (req, res) => {
-  res.redirect(req.user ? '/settings' : '/login');
+  if (req.user) return res.redirect('/settings');
+  res.render('landing', { title: 'Welcome' });
+});
+
+app.get('/terms', (req, res) => {
+  res.render('terms', { title: 'Terms & Conditions' });
+});
+
+app.get('/privacy', (req, res) => {
+  res.render('privacy', { title: 'Privacy Policy' });
 });
 
 app.use('/', authRoutes);
