@@ -7,7 +7,7 @@ const { body, validationResult } = require('express-validator');
 const rateLimit = require('express-rate-limit');
 
 const User = require('../models/User');
-const { sendVerificationEmail, sendPasswordResetEmail } = require('../utils/mailer');
+const { sendVerificationCodeEmail, sendPasswordResetEmail } = require('../utils/mailer');
 
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -31,6 +31,31 @@ function makeToken() {
   return crypto.randomBytes(32).toString('hex');
 }
 
+function makeVerifyCode() {
+  return crypto.randomInt(0, 1000000).toString().padStart(6, '0');
+}
+
+// ---------- USERNAME AVAILABILITY (live check) ----------
+router.get('/check-username', async (req, res) => {
+  const username = (req.query.username || '').trim();
+
+  if (!User.USERNAME_PATTERN.test(username)) {
+    return res.json({
+      available: false,
+      reason: 'Use 3-32 letters, numbers, or underscores.'
+    });
+  }
+
+  try {
+    const excludeId = req.user ? req.user.id : null;
+    const taken = await User.isUsernameTaken(username, excludeId);
+    res.json({ available: !taken, reason: taken ? 'That username is already taken.' : null });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ available: false, reason: 'Could not check right now.' });
+  }
+});
+
 // ---------- SIGNUP ----------
 router.get('/signup', (req, res) => {
   if (req.user) return res.redirect('/settings');
@@ -42,6 +67,10 @@ router.post(
   authLimiter,
   [
     body('name').trim().isLength({ min: 2 }).withMessage('Name must be at least 2 characters.'),
+    body('username')
+      .trim()
+      .matches(User.USERNAME_PATTERN)
+      .withMessage('Username must be 3-32 characters: letters, numbers, or underscores only.'),
     body('email').trim().isEmail().withMessage('Enter a valid email address.').normalizeEmail(),
     body('password').isLength({ min: 8 }).withMessage('Password must be at least 8 characters.'),
     body('confirmPassword').custom((value, { req }) => value === req.body.password).withMessage('Passwords do not match.')
@@ -53,38 +82,45 @@ router.post(
       return res.redirect('/signup');
     }
 
-    const { name, email, password } = req.body;
+    const { name, username, email, password } = req.body;
 
     try {
-      const existing = await User.findByEmail(email);
-      if (existing) {
+      const existingEmail = await User.findByEmail(email);
+      if (existingEmail) {
         req.flash('error', 'An account with that email already exists.');
         return res.redirect('/signup');
       }
 
+      const usernameTaken = await User.isUsernameTaken(username);
+      if (usernameTaken) {
+        req.flash('error', 'That username is already taken.');
+        return res.redirect('/signup');
+      }
+
       const hashed = await bcrypt.hash(password, 12);
-      const verifyToken = makeToken();
-      const verifyTokenExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
+      const verifyToken = makeVerifyCode();
+      const verifyTokenExpires = new Date(Date.now() + 10 * 60 * 1000);
 
       const id = await User.create({
         name,
+        username,
         email,
         password: hashed,
         verifyToken,
         verifyTokenExpires
       });
 
-      const link = `${process.env.APP_URL}/verify-email/${verifyToken}`;
       try {
-        await sendVerificationEmail(email, link);
+        await sendVerificationCodeEmail(email, verifyToken);
       } catch (mailErr) {
         console.error('Failed to send verification email:', mailErr.message);
-        req.flash('error', 'Account created, but the verification email failed to send. Contact support or try resending it from the login page.');
-        return res.redirect('/login');
+        req.flash('error', 'Account created, but the verification email failed to send. Contact support or try resending it below.');
+        return res.redirect(`/verify-email?email=${encodeURIComponent(email)}`);
       }
 
-      req.flash('success', 'Account created! Check your email for a verification link before logging in.');
-      res.redirect('/login');
+      req.session.pendingVerifyEmail = email;
+      req.flash('success', 'Account created! Enter the 6-digit code we sent to your email.');
+      res.redirect('/verify-email');
     } catch (err) {
       console.error(err);
       req.flash('error', 'Something went wrong creating your account. Please try again.');
@@ -93,23 +129,45 @@ router.post(
   }
 );
 
-// ---------- EMAIL VERIFICATION ----------
-router.get('/verify-email/:token', async (req, res) => {
-  try {
-    const user = await User.findByVerifyToken(req.params.token);
-    if (!user) {
-      req.flash('error', 'That verification link is invalid or has expired.');
-      return res.redirect('/login');
-    }
-    await User.markVerified(user.id);
-    req.flash('success', 'Email verified! You can now log in.');
-    res.redirect('/login');
-  } catch (err) {
-    console.error(err);
-    req.flash('error', 'Something went wrong verifying your email.');
-    res.redirect('/login');
-  }
+// ---------- EMAIL VERIFICATION (6-digit code) ----------
+router.get('/verify-email', (req, res) => {
+  if (req.user) return res.redirect('/settings');
+  const email = req.query.email || req.session.pendingVerifyEmail || '';
+  res.render('verify-email', { title: 'Verify your email', email });
 });
+
+router.post(
+  '/verify-email',
+  authLimiter,
+  [
+    body('email').trim().isEmail().withMessage('Enter a valid email address.').normalizeEmail(),
+    body('code').trim().isLength({ min: 6, max: 6 }).isNumeric().withMessage('Enter the 6-digit code.')
+  ],
+  async (req, res) => {
+    const { email, code } = req.body;
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      errors.array().forEach((e) => req.flash('error', e.msg));
+      return res.redirect(`/verify-email?email=${encodeURIComponent(email || '')}`);
+    }
+
+    try {
+      const user = await User.findByEmailAndVerifyCode(email, code);
+      if (!user) {
+        req.flash('error', 'That code is invalid or has expired.');
+        return res.redirect(`/verify-email?email=${encodeURIComponent(email)}`);
+      }
+      await User.markVerified(user.id);
+      delete req.session.pendingVerifyEmail;
+      req.flash('success', 'Email verified! You can now log in.');
+      res.redirect('/login');
+    } catch (err) {
+      console.error(err);
+      req.flash('error', 'Something went wrong verifying your email.');
+      res.redirect(`/verify-email?email=${encodeURIComponent(email || '')}`);
+    }
+  }
+);
 
 router.post('/resend-verification', authLimiter, [body('email').trim().isEmail().normalizeEmail()], async (req, res) => {
   const { email } = req.body;
@@ -117,18 +175,18 @@ router.post('/resend-verification', authLimiter, [body('email').trim().isEmail()
     const user = await User.findByEmail(email);
     // Always show the same message so we don't leak which emails are registered
     if (user && !user.is_verified) {
-      const verifyToken = makeToken();
-      const verifyTokenExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
+      const verifyToken = makeVerifyCode();
+      const verifyTokenExpires = new Date(Date.now() + 10 * 60 * 1000);
       await User.setVerifyToken(user.id, verifyToken, verifyTokenExpires);
-      const link = `${process.env.APP_URL}/verify-email/${verifyToken}`;
-      await sendVerificationEmail(email, link);
+      await sendVerificationCodeEmail(email, verifyToken);
     }
-    req.flash('success', 'If that account needs verifying, a new email is on its way.');
-    res.redirect('/login');
+    req.session.pendingVerifyEmail = email;
+    req.flash('success', 'If that account needs verifying, a new code is on its way.');
+    res.redirect(`/verify-email?email=${encodeURIComponent(email)}`);
   } catch (err) {
     console.error(err);
-    req.flash('error', 'Could not resend verification email right now.');
-    res.redirect('/login');
+    req.flash('error', 'Could not resend the verification code right now.');
+    res.redirect(`/verify-email?email=${encodeURIComponent(email || '')}`);
   }
 });
 
@@ -158,8 +216,8 @@ router.post(
       }
 
       if (!user.is_verified) {
-        req.flash('error', 'Please verify your email before logging in. Check your inbox, or resend the link below.');
-        return res.redirect('/login');
+        req.flash('error', 'Please verify your email before logging in.');
+        return res.redirect(`/verify-email?email=${encodeURIComponent(email)}`);
       }
 
       issueToken(res, user);
