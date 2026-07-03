@@ -10,6 +10,9 @@ const pool = mysql.createPool({
   waitForConnections: true,
   connectionLimit: 5,
   queueLimit: 0,
+  // Treat all DATETIME columns as UTC on both read and write, regardless of
+  // whatever timezone the DB host's own clock happens to be set to.
+  timezone: 'Z',
   // FreeSQLDatabase and many free MySQL hosts sit behind SSL-less or
   // self-signed setups; this keeps compatibility without failing connections.
   ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : undefined
