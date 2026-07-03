@@ -7,14 +7,23 @@
   <div class="settings-wrap">
     <div class="settings-header">
       <%- include('partials/brand') %>
-      <form class="logout-form" method="POST" action="/logout">
-        <button class="btn btn-secondary" type="submit" style="width:auto;padding:9px 16px;">Log out</button>
-      </form>
+      <div class="header-actions">
+        <form class="logout-form" method="POST" action="/logout">
+          <button class="btn btn-secondary" type="submit" style="width:auto;padding:9px 16px;">Log out</button>
+        </form>
+        <div class="menu-wrap">
+          <button class="menu-btn" id="menu-btn" aria-label="Open menu" aria-haspopup="true" aria-expanded="false">&#8942;</button>
+          <div class="dropdown" id="dropdown">
+            <button id="open-about" type="button">About</button>
+            <button id="open-settings" type="button">Settings</button>
+          </div>
+        </div>
+      </div>
     </div>
 
     <%- include('partials/flash') %>
 
-    <div class="panel">
+    <div class="panel" id="profile-panel">
       <h2>Profile</h2>
       <p class="desc">
         Update your name and email.
@@ -106,5 +115,64 @@
       </form>
     </div>
   </div>
+
+  <div class="modal-overlay" id="about-overlay">
+    <div class="modal">
+      <button class="modal-close" data-close type="button">&times;</button>
+      <h3>About VaultGate</h3>
+      <p>VaultGate is your account dashboard for managing your profile, username, email, and password in one secure place.</p>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      const menuBtn = document.getElementById('menu-btn');
+      const dropdown = document.getElementById('dropdown');
+      const aboutOverlay = document.getElementById('about-overlay');
+      const profilePanel = document.getElementById('profile-panel');
+
+      function closeDropdown() {
+        dropdown.classList.remove('open');
+        menuBtn.setAttribute('aria-expanded', 'false');
+      }
+
+      menuBtn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        const isOpen = dropdown.classList.toggle('open');
+        menuBtn.setAttribute('aria-expanded', String(isOpen));
+      });
+
+      document.addEventListener('click', function (e) {
+        if (!dropdown.contains(e.target) && e.target !== menuBtn) closeDropdown();
+      });
+
+      document.getElementById('open-about').addEventListener('click', function () {
+        closeDropdown();
+        aboutOverlay.classList.add('open');
+      });
+
+      document.getElementById('open-settings').addEventListener('click', function () {
+        closeDropdown();
+        profilePanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+
+      document.querySelectorAll('[data-close]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          aboutOverlay.classList.remove('open');
+        });
+      });
+
+      aboutOverlay.addEventListener('click', function (e) {
+        if (e.target === aboutOverlay) aboutOverlay.classList.remove('open');
+      });
+
+      document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') {
+          aboutOverlay.classList.remove('open');
+          closeDropdown();
+        }
+      });
+    })();
+  </script>
 </body>
 </html>
