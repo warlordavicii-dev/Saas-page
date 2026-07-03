@@ -1,6 +1,7 @@
 const nodemailer = require('nodemailer');
 require('dotenv').config();
 
+// Show SMTP configuration on startup
 console.log('SMTP CONFIG:', {
   host: process.env.SMTP_HOST,
   port: process.env.SMTP_PORT,
@@ -9,11 +10,11 @@ console.log('SMTP CONFIG:', {
   from: process.env.SMTP_FROM_EMAIL
 });
 
+// Create transporter
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST,
-  port: parseInt(process.env.SMTP_PORT || '587'),
+  port: Number(process.env.SMTP_PORT) || 465,
   secure: process.env.SMTP_SECURE === 'true',
-  requireTLS: true,
 
   auth: {
     user: process.env.SMTP_USER,
@@ -25,54 +26,133 @@ const transporter = nodemailer.createTransport({
   socketTimeout: 30000
 });
 
-transporter.verify((err) => {
-  if (err) {
-    console.error('SMTP VERIFY ERROR:', err);
+// Verify SMTP connection on startup
+transporter.verify((error) => {
+  if (error) {
+    console.error('❌ SMTP VERIFY ERROR:', error);
   } else {
-    console.log('SMTP READY');
+    console.log('✅ SMTP READY');
   }
 });
 
-const fromHeader = `"${process.env.SMTP_FROM_NAME || process.env.APP_NAME || 'App'}" <${process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER}>`;
+// From header
+const fromHeader =
+  `"${process.env.SMTP_FROM_NAME || process.env.APP_NAME || 'App'}" ` +
+  `<${process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER}>`;
 
+// Generic mail sender
 async function sendMail({ to, subject, html, text }) {
-  console.log('Sending email to:', to);
+  try {
+    console.log('📨 Sending email to:', to);
 
-  const info = await transporter.sendMail({
-    from: fromHeader,
-    to,
-    subject,
-    html,
-    text
-  });
+    const info = await transporter.sendMail({
+      from: fromHeader,
+      to,
+      subject,
+      html,
+      text
+    });
 
-  console.log('Email sent:', info.messageId);
-  return info;
+    console.log('✅ Email sent successfully');
+    console.log('Message ID:', info.messageId);
+    console.log('Response:', info.response);
+
+    return info;
+  } catch (error) {
+    console.error('❌ EMAIL SEND ERROR');
+    console.error(error);
+    throw error;
+  }
 }
 
+// Verification email
 async function sendVerificationEmail(to, link) {
   return sendMail({
     to,
     subject: `Verify your ${process.env.APP_NAME || 'account'}`,
     html: `
-      <h2>Confirm your email</h2>
-      <p>Please click the link below to verify your account:</p>
-      <p><a href="${link}">${link}</a></p>
-      <p>This link expires in 24 hours.</p>
+      <div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;padding:20px;">
+        <h2>Verify your email address</h2>
+
+        <p>
+          Thank you for creating an account.
+          Click the button below to verify your email address.
+        </p>
+
+        <p style="margin:30px 0;">
+          <a href="${link}"
+             style="
+               background:#2563eb;
+               color:#ffffff;
+               padding:12px 24px;
+               text-decoration:none;
+               border-radius:6px;
+               display:inline-block;
+             ">
+            Verify Email
+          </a>
+        </p>
+
+        <p>
+          If the button doesn't work, copy and paste this link:
+        </p>
+
+        <p>
+          <a href="${link}">${link}</a>
+        </p>
+
+        <p>
+          This link expires in 24 hours.
+        </p>
+      </div>
     `,
-    text: `Verify your account: ${link}`
+    text: `Verify your email: ${link}`
   });
 }
 
+// Password reset email
 async function sendPasswordResetEmail(to, link) {
   return sendMail({
     to,
     subject: `Reset your ${process.env.APP_NAME || 'account'} password`,
     html: `
-      <h2>Reset your password</h2>
-      <p>Click the link below to reset your password:</p>
-      <p><a href="${link}">${link}</a></p>
-      <p>This link expires in 1 hour.</p>
+      <div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;padding:20px;">
+        <h2>Reset your password</h2>
+
+        <p>
+          We received a request to reset your password.
+        </p>
+
+        <p style="margin:30px 0;">
+          <a href="${link}"
+             style="
+               background:#dc2626;
+               color:#ffffff;
+               padding:12px 24px;
+               text-decoration:none;
+               border-radius:6px;
+               display:inline-block;
+             ">
+            Reset Password
+          </a>
+        </p>
+
+        <p>
+          If the button doesn't work, copy and paste this link:
+        </p>
+
+        <p>
+          <a href="${link}">${link}</a>
+        </p>
+
+        <p>
+          This link expires in 1 hour.
+        </p>
+
+        <p>
+          If you did not request this reset, you can ignore this email.
+        </p>
+      </div>
     `,
     text: `Reset your password: ${link}`
   });
