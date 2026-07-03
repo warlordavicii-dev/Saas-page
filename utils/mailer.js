@@ -1,7 +1,6 @@
 const nodemailer = require('nodemailer');
 require('dotenv').config();
 
-// Display SMTP configuration on startup
 console.log('SMTP CONFIG:', {
   host: process.env.SMTP_HOST,
   port: process.env.SMTP_PORT,
@@ -10,57 +9,78 @@ console.log('SMTP CONFIG:', {
   from: process.env.SMTP_FROM_EMAIL
 });
 
-// Create SMTP transporter
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST,
-  port: Number(process.env.SMTP_PORT) || 587,
-
-  // false for port 587, true for port 465
+  port: parseInt(process.env.SMTP_PORT || '587'),
   secure: process.env.SMTP_SECURE === 'true',
+  requireTLS: true,
 
   auth: {
     user: process.env.SMTP_USER,
     pass: process.env.SMTP_PASSWORD
   },
 
-  // Enable SMTP debugging
-  logger: true,
-  debug: true,
-
-  // Increased timeouts for Render
-  connectionTimeout: 60000,
+  connectionTimeout: 30000,
   greetingTimeout: 30000,
-  socketTimeout: 60000
+  socketTimeout: 30000
 });
 
-// Verify SMTP connection on startup
-transporter.verify((error, success) => {
-  if (error) {
-    console.error('❌ SMTP VERIFY ERROR');
-    console.error(error);
+transporter.verify((err) => {
+  if (err) {
+    console.error('SMTP VERIFY ERROR:', err);
   } else {
-    console.log('✅ SMTP READY');
+    console.log('SMTP READY');
   }
 });
 
-// Default From header
-const fromHeader =
-  `"${process.env.SMTP_FROM_NAME || process.env.APP_NAME || 'App'}" ` +
-  `<${process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER}>`;
+const fromHeader = `"${process.env.SMTP_FROM_NAME || process.env.APP_NAME || 'App'}" <${process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER}>`;
 
-// Generic mail sender
 async function sendMail({ to, subject, html, text }) {
-  try {
-    console.log(`📨 Sending email to ${to}`);
+  console.log('Sending email to:', to);
 
-    const info = await transporter.sendMail({
-      from: fromHeader,
-      to,
-      subject,
-      html,
-      text
-    });
+  const info = await transporter.sendMail({
+    from: fromHeader,
+    to,
+    subject,
+    html,
+    text
+  });
 
-    console.log('✅ Email sent successfully');
-    console.log('Message ID:', info.messageId);
-    console.log('SMTP response:', info.response);
+  console.log('Email sent:', info.messageId);
+  return info;
+}
+
+async function sendVerificationEmail(to, link) {
+  return sendMail({
+    to,
+    subject: `Verify your ${process.env.APP_NAME || 'account'}`,
+    html: `
+      <h2>Confirm your email</h2>
+      <p>Please click the link below to verify your account:</p>
+      <p><a href="${link}">${link}</a></p>
+      <p>This link expires in 24 hours.</p>
+    `,
+    text: `Verify your account: ${link}`
+  });
+}
+
+async function sendPasswordResetEmail(to, link) {
+  return sendMail({
+    to,
+    subject: `Reset your ${process.env.APP_NAME || 'account'} password`,
+    html: `
+      <h2>Reset your password</h2>
+      <p>Click the link below to reset your password:</p>
+      <p><a href="${link}">${link}</a></p>
+      <p>This link expires in 1 hour.</p>
+    `,
+    text: `Reset your password: ${link}`
+  });
+}
+
+module.exports = {
+  transporter,
+  sendMail,
+  sendVerificationEmail,
+  sendPasswordResetEmail
+};
