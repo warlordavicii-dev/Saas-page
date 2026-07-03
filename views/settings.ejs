@@ -4,6 +4,9 @@
   <%- include('partials/head') %>
 </head>
 <body>
+  <div class="hacklink-bg" id="hacklink-bg"></div>
+  <div class="hacklink-pulse" id="hacklink-pulse"></div>
+
   <div class="settings-wrap">
     <div class="settings-header">
       <%- include('partials/brand') %>
@@ -22,6 +25,21 @@
     </div>
 
     <%- include('partials/flash') %>
+
+    <div class="panel" id="appearance-panel">
+      <h2>Appearance</h2>
+      <p class="desc">Choose how your dashboard background looks.</p>
+      <div class="theme-toggle">
+        <button type="button" class="theme-option" data-theme="hacklink" id="theme-hacklink-btn">
+          <span class="theme-swatch swatch-hacklink"></span>
+          HackLink
+        </button>
+        <button type="button" class="theme-option" data-theme="classic" id="theme-classic-btn">
+          <span class="theme-swatch swatch-classic"></span>
+          Classic
+        </button>
+      </div>
+    </div>
 
     <div class="panel" id="profile-panel">
       <h2>Profile</h2>
@@ -113,6 +131,30 @@
         </div>
         <button class="btn btn-primary" type="submit">Update password</button>
       </form>
+    </div>
+    <div class="panel" id="links-panel">
+      <h2>Community &amp; support</h2>
+      <p class="desc">Reach the VaultGate team or join the community.</p>
+      <nav class="links-grid" aria-label="Community and support links">
+        <a class="link-btn" href="https://whatsapp.com/channel/0029Vb6jxRD7IUYbQfokIu2s" target="_blank" rel="noopener noreferrer" aria-label="WhatsApp channel (opens in a new tab)">
+          <i class="fab fa-whatsapp" aria-hidden="true"></i> WhatsApp channel
+        </a>
+        <a class="link-btn" href="https://whatsapp.com/channel/0029Vb62TDsAYlUBrGoU1y3S" target="_blank" rel="noopener noreferrer" aria-label="WhatsApp backup channel (opens in a new tab)">
+          <i class="fab fa-whatsapp" aria-hidden="true"></i> Backup channel
+        </a>
+        <a class="link-btn" href="https://chat.whatsapp.com/IWTPLw7WogG0sc5L4u2syz?mode=ac_t" target="_blank" rel="noopener noreferrer" aria-label="WhatsApp group (opens in a new tab)">
+          <i class="fab fa-whatsapp" aria-hidden="true"></i> WhatsApp group
+        </a>
+        <a class="link-btn" href="https://wa.me/254769677305" target="_blank" rel="noopener noreferrer" aria-label="Contact support on WhatsApp (opens in a new tab)">
+          <i class="fas fa-headset" aria-hidden="true"></i> Contact support
+        </a>
+        <a class="link-btn" href="https://wa.me/254788409105" target="_blank" rel="noopener noreferrer" aria-label="Contact Artisan Due on WhatsApp (opens in a new tab)">
+          <i class="fas fa-headset" aria-hidden="true"></i> Contact 501 takeoff
+        </a>
+        <a class="link-btn" href="https://wa.me/254788409105" target="_blank" rel="noopener noreferrer" aria-label="Contact Nicky on WhatsApp (opens in a new tab)">
+          <i class="fas fa-headset" aria-hidden="true"></i> Contact Nicky
+        </a>
+      </nav>
     </div>
   </div>
 
