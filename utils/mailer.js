@@ -1,216 +1,122 @@
 require('dotenv').config();
 
 // -----------------------------------------------------
-// Configuration
+// Config
 // -----------------------------------------------------
 
-const fromName =
-  process.env.SMTP_FROM_NAME ||
-  process.env.APP_NAME ||
-  'App';
-
-const fromEmail =
-  process.env.SMTP_FROM_EMAIL;
-
-console.log('MAIL DELIVERY MODE: Brevo HTTPS API');
+const fromName = process.env.SMTP_FROM_NAME || process.env.APP_NAME || 'App';
+const fromEmail = process.env.SMTP_FROM_EMAIL;
 
 if (!process.env.BREVO_API_KEY) {
-  throw new Error(
-    'BREVO_API_KEY environment variable is missing'
-  );
+  throw new Error('BREVO_API_KEY environment variable is missing');
 }
 
+console.log('📧 MAIL MODE: Brevo API (ACTIVE)');
+
 // -----------------------------------------------------
-// Generic sender
+// Core Brevo sender
 // -----------------------------------------------------
 
-async function sendMail({
-  to,
-  subject,
-  html,
-  text
-}) {
-  try {
-    console.log('📨 Sending email to:', to);
+async function sendMail({ to, subject, html, text }) {
+  const res = await fetch('https://api.brevo.com/v3/smtp/email', {
+    method: 'POST',
+    headers: {
+      'api-key': process.env.BREVO_API_KEY,
+      'content-type': 'application/json',
+      accept: 'application/json'
+    },
+    body: JSON.stringify({
+      sender: {
+        name: fromName,
+        email: fromEmail
+      },
+      to: [{ email: to }],
+      subject,
+      htmlContent: html,
+      textContent: text
+    })
+  });
 
-    const response = await fetch(
-      'https://api.brevo.com/v3/smtp/email',
-      {
-        method: 'POST',
-        headers: {
-          accept: 'application/json',
-          'content-type': 'application/json',
-          'api-key': process.env.BREVO_API_KEY
-        },
-        body: JSON.stringify({
-          sender: {
-            name: fromName,
-            email: fromEmail
-          },
-          to: [
-            {
-              email: to
-            }
-          ],
-          subject,
-          htmlContent: html,
-          textContent: text
-        })
-      }
-    );
-
-    if (!response.ok) {
-      const body = await response.text();
-      throw new Error(
-        `Brevo API ${response.status}: ${body}`
-      );
-    }
-
-    const result = await response.json();
-
-    console.log('✅ Email sent');
-    console.log(result);
-
-    return result;
-
-  } catch (error) {
-    console.error(
-      '❌ EMAIL SEND ERROR:',
-      error.message
-    );
-    throw error;
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`Brevo Error ${res.status}: ${err}`);
   }
+
+  return res.json();
 }
 
 // -----------------------------------------------------
-// Email verification
+// OTP Verification Email (FIXED FOR YOUR SYSTEM)
 // -----------------------------------------------------
 
-async function sendVerificationEmail(
-  to,
-  verificationLink
-) {
+async function sendVerificationCodeEmail(to, code) {
   return sendMail({
     to,
-    subject: `Verify your ${process.env.APP_NAME || 'account'}`,
-
+    subject: 'Your verification code',
     html: `
-      <div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;padding:20px;">
-        <h2>Verify your email address</h2>
+      <div style="font-family:Arial;max-width:600px;margin:auto;padding:20px;">
+        <h2>Verify your account</h2>
 
-        <p>
-          Thank you for signing up.
-          Click the button below to verify your account.
-        </p>
+        <p>Your verification code is:</p>
 
-        <p style="margin:30px 0;">
-          <a
-            href="${verificationLink}"
-            style="
-              background:#2563eb;
-              color:white;
-              padding:12px 24px;
-              border-radius:6px;
-              text-decoration:none;
-              display:inline-block;
-            "
-          >
-            Verify Email
-          </a>
-        </p>
+        <div style="
+          font-size:32px;
+          font-weight:bold;
+          letter-spacing:6px;
+          margin:20px 0;
+          padding:10px;
+          background:#f3f4f6;
+          display:inline-block;
+        ">
+          ${code}
+        </div>
 
-        <p>
-          If the button doesn't work,
-          copy and paste this link:
-        </p>
-
-        <p>
-          <a href="${verificationLink}">
-            ${verificationLink}
-          </a>
-        </p>
-
-        <p>
-          This link expires in 24 hours.
-        </p>
+        <p>This code expires in 10 minutes.</p>
       </div>
     `,
-
-    text: `
-Verify your account:
-
-${verificationLink}
-
-This link expires in 24 hours.
-`
+    text: `Your verification code is ${code}. It expires in 10 minutes.`
   });
 }
 
 // -----------------------------------------------------
-// Password reset
+// Password Reset Email
 // -----------------------------------------------------
 
-async function sendPasswordResetEmail(
-  to,
-  resetLink
-) {
+async function sendPasswordResetEmail(to, link) {
   return sendMail({
     to,
-    subject: `Reset your ${process.env.APP_NAME || 'account'} password`,
-
+    subject: 'Reset your password',
     html: `
-      <div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;padding:20px;">
-        <h2>Reset your password</h2>
+      <div style="font-family:Arial;max-width:600px;margin:auto;padding:20px;">
+        <h2>Password Reset</h2>
 
-        <p>
-          We received a request to reset your password.
-        </p>
+        <p>We received a request to reset your password.</p>
 
         <p style="margin:30px 0;">
-          <a
-            href="${resetLink}"
-            style="
-              background:#dc2626;
-              color:white;
-              padding:12px 24px;
-              border-radius:6px;
-              text-decoration:none;
-              display:inline-block;
-            "
-          >
+          <a href="${link}" style="
+            background:#dc2626;
+            color:white;
+            padding:12px 24px;
+            border-radius:6px;
+            text-decoration:none;
+            display:inline-block;
+          ">
             Reset Password
           </a>
         </p>
 
-        <p>
-          If the button doesn't work,
-          copy and paste this link:
-        </p>
+        <p>If the button doesn't work:</p>
+        <p>${link}</p>
 
-        <p>
-          <a href="${resetLink}">
-            ${resetLink}
-          </a>
-        </p>
-
-        <p>
-          This link expires in 1 hour.
-        </p>
+        <p>This link expires in 1 hour.</p>
       </div>
     `,
-
-    text: `
-Reset your password:
-
-${resetLink}
-
-This link expires in 1 hour.
-`
+    text: `Reset your password: ${link}`
   });
 }
 
 module.exports = {
   sendMail,
-  sendVerificationEmail,
+  sendVerificationCodeEmail,
   sendPasswordResetEmail
 };
