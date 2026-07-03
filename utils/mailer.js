@@ -1,38 +1,52 @@
 const nodemailer = require('nodemailer');
 require('dotenv').config();
 
+// Show SMTP configuration on startup
+console.log('SMTP CONFIG:', {
+  host: process.env.SMTP_HOST,
+  port: process.env.SMTP_PORT,
+  secure: process.env.SMTP_SECURE,
+  user: process.env.SMTP_USER,
+  from: process.env.SMTP_FROM_EMAIL
+});
+
 // Create transporter
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST,
   port: Number(process.env.SMTP_PORT) || 587,
 
-  // true only for port 465
-  secure: process.env.SMTP_SECURE === 'false',
+  // TRUE only for port 465
+  secure: process.env.SMTP_SECURE === 'true',
+
+  // Required for STARTTLS (port 587)
+  requireTLS: true,
 
   auth: {
     user: process.env.SMTP_USER,
     pass: process.env.SMTP_PASSWORD
   },
 
-  tls: {
-    rejectUnauthorized: false
-  }
+  connectionTimeout: 10000,
+  greetingTimeout: 10000,
+  socketTimeout: 10000
 });
 
 // Verify SMTP connection on startup
 transporter.verify((error, success) => {
   if (error) {
-    console.error('❌ SMTP connection failed:', error);
+    console.error('❌ VERIFY ERROR');
+    console.error(error);
   } else {
-    console.log('✅ SMTP server is ready');
+    console.log('✅ SMTP READY');
   }
 });
 
+// From header
 const fromHeader =
   `"${process.env.SMTP_FROM_NAME || process.env.APP_NAME || 'App'}" ` +
   `<${process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER}>`;
 
-// Generic send mail function
+// Generic mail sender
 async function sendMail({ to, subject, html, text }) {
   try {
     console.log('📨 Sending email to:', to);
@@ -56,7 +70,7 @@ async function sendMail({ to, subject, html, text }) {
     };
 
   } catch (error) {
-    console.error('❌ Email sending failed:');
+    console.error('❌ Email sending failed');
     console.error(error);
 
     return {
@@ -66,7 +80,7 @@ async function sendMail({ to, subject, html, text }) {
   }
 }
 
-// Verification email
+// Email verification
 function sendVerificationEmail(to, link) {
   return sendMail({
     to,
@@ -107,7 +121,7 @@ function sendVerificationEmail(to, link) {
   });
 }
 
-// Password reset email
+// Password reset
 function sendPasswordResetEmail(to, link) {
   return sendMail({
     to,
