@@ -1,7 +1,7 @@
 {
   "name": "vaultgate-auth",
   "version": "1.0.0",
-  "description": "Login, signup, email verification, forgot password, and account settings starter app using MySQL + SMTP.",
+  "description": "Login, signup, email verification, forgot password, and account settings starter app using MySQL + Brevo API.",
   "main": "server.js",
   "engines": {
     "node": ">=18.0.0"
@@ -11,6 +11,7 @@
     "initdb": "node scripts/initDb.js"
   },
   "dependencies": {
+    "@getbrevo/brevo": "^2.0.0",
     "bcryptjs": "^2.4.3",
     "connect-flash": "^0.1.1",
     "cookie-parser": "^1.4.6",
@@ -21,8 +22,7 @@
     "express-session": "^1.18.0",
     "express-validator": "^7.2.0",
     "jsonwebtoken": "^9.0.2",
-    "mysql2": "^3.11.3",
-    "nodemailer": "^6.9.15"
+    "mysql2": "^3.11.3"
   },
   "license": "MIT"
 }
