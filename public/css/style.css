@@ -339,6 +339,49 @@ a:hover { text-decoration: underline; }
 
 .modal-close:hover { color: var(--brass); }
 
+/* Community / support links */
+.links-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+  margin-top: 6px;
+}
+
+.link-btn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 500;
+  transition: border-color 0.2s ease, transform 0.15s ease, background 0.2s ease;
+}
+
+.link-btn i {
+  font-size: 18px;
+  color: var(--brass);
+  width: 22px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.link-btn:hover,
+.link-btn:focus-visible {
+  border-color: var(--brass);
+  background: var(--surface);
+  transform: translateY(-1px);
+}
+
+.link-btn:focus-visible {
+  outline: 2px solid var(--brass);
+  outline-offset: 2px;
+}
+
 .panel {
   background: var(--surface);
   border: 1px solid var(--border);
