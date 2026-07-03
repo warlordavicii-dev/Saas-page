@@ -121,34 +121,53 @@ router.post(
     const { name, username, email, password } = req.body;
 
     try {
-      if (await User.findByEmail(email)) {
+      const existing = await User.findByEmail(email);
+
+      if (existing && existing.is_verified) {
         req.flash('error', 'Email already exists');
         return res.redirect('/signup');
       }
 
-      if (await User.isUsernameTaken(username)) {
+      if (!existing && (await User.isUsernameTaken(username))) {
         req.flash('error', 'Username already taken');
         return res.redirect('/signup');
       }
 
       const hashed = await bcrypt.hash(password, 12);
-
       const code = makeVerifyCode();
       const expires = new Date(Date.now() + 10 * 60 * 1000);
 
-      await User.create({
-        name,
-        username,
-        email,
-        password: hashed,
-        verifyToken: code,
-        verifyTokenExpires: expires
-      });
-
-      await sendVerificationCodeEmail(email, code);
+      if (existing) {
+        // Unverified account from a previous incomplete signup attempt
+        // (e.g. the verification email failed to send last time).
+        // Reuse it instead of blocking the person from ever retrying.
+        await User.updateProfile(existing.id, { name, username, email });
+        await User.setVerifyToken(existing.id, code, expires);
+        const pool = require('../config/db');
+        await pool.query('UPDATE users SET password = ? WHERE id = ?', [hashed, existing.id]);
+      } else {
+        await User.create({
+          name,
+          username,
+          email,
+          password: hashed,
+          verifyToken: code,
+          verifyTokenExpires: expires
+        });
+      }
 
       req.session.pendingVerifyEmail = email;
-      req.flash('success', 'Check your email for the 6-digit code');
+
+      try {
+        await sendVerificationCodeEmail(email, code);
+        req.flash('success', 'Check your email for the 6-digit code');
+      } catch (mailErr) {
+        // Account exists and has a valid code even if the email didn't arrive.
+        // Don't strand the person on a "failed" signup page.
+        console.error('Verification email failed to send:', mailErr);
+        req.flash('error', 'Account created, but the verification email could not be sent. Tap "resend" on the next page.');
+      }
+
       res.redirect('/verify-email');
 
     } catch (err) {
