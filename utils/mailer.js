@@ -1,55 +1,8 @@
-const nodemailer = require('nodemailer');
 require('dotenv').config();
 
-// ---------------------------------------------------------------------
-// Delivery strategy
-// ---------------------------------------------------------------------
-// If BREVO_API_KEY exists, use Brevo HTTPS API (works on Render Free).
-// Otherwise, fall back to SMTP for local development.
-// ---------------------------------------------------------------------
-
-const useApi = Boolean(process.env.BREVO_API_KEY);
-
-console.log(
-  'MAIL DELIVERY MODE:',
-  useApi
-    ? 'Brevo HTTPS API'
-    : 'SMTP via nodemailer'
-);
-
-let transporter = null;
-
-if (!useApi) {
-  transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST,
-    port: Number(process.env.SMTP_PORT) || 465,
-    secure: process.env.SMTP_SECURE === 'true',
-
-    auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASSWORD
-    },
-
-    connectionTimeout: 30000,
-    greetingTimeout: 30000,
-    socketTimeout: 30000
-  });
-
-  transporter.verify((error) => {
-    if (error) {
-      console.error('❌ SMTP VERIFY ERROR:', error.message);
-      console.error(
-        'If this is Render Free, SMTP ports are blocked. Use BREVO_API_KEY.'
-      );
-    } else {
-      console.log('✅ SMTP READY');
-    }
-  });
-}
-
-// ---------------------------------------------------------------------
-// Sender information
-// ---------------------------------------------------------------------
+// -----------------------------------------------------
+// Configuration
+// -----------------------------------------------------
 
 const fromName =
   process.env.SMTP_FROM_NAME ||
@@ -57,75 +10,19 @@ const fromName =
   'App';
 
 const fromEmail =
-  process.env.SMTP_FROM_EMAIL ||
-  process.env.SMTP_USER;
+  process.env.SMTP_FROM_EMAIL;
 
-const fromHeader = `"${fromName}" <${fromEmail}>`;
+console.log('MAIL DELIVERY MODE: Brevo HTTPS API');
 
-// ---------------------------------------------------------------------
-// Brevo API sender
-// ---------------------------------------------------------------------
-
-async function sendViaBrevoApi({
-  to,
-  subject,
-  html,
-  text
-}) {
-  const response = await fetch(
-    'https://api.brevo.com/v3/smtp/email',
-    {
-      method: 'POST',
-      headers: {
-        accept: 'application/json',
-        'content-type': 'application/json',
-        'api-key': process.env.BREVO_API_KEY
-      },
-      body: JSON.stringify({
-        sender: {
-          name: fromName,
-          email: fromEmail
-        },
-        to: [{ email: to }],
-        subject,
-        htmlContent: html,
-        textContent: text
-      })
-    }
+if (!process.env.BREVO_API_KEY) {
+  throw new Error(
+    'BREVO_API_KEY environment variable is missing'
   );
-
-  if (!response.ok) {
-    const body = await response.text().catch(() => '');
-    throw new Error(
-      `Brevo API error ${response.status}: ${body}`
-    );
-  }
-
-  return response.json();
 }
 
-// ---------------------------------------------------------------------
-// SMTP sender
-// ---------------------------------------------------------------------
-
-async function sendViaSmtp({
-  to,
-  subject,
-  html,
-  text
-}) {
-  return transporter.sendMail({
-    from: fromHeader,
-    to,
-    subject,
-    html,
-    text
-  });
-}
-
-// ---------------------------------------------------------------------
+// -----------------------------------------------------
 // Generic sender
-// ---------------------------------------------------------------------
+// -----------------------------------------------------
 
 async function sendMail({
   to,
@@ -136,23 +33,46 @@ async function sendMail({
   try {
     console.log('📨 Sending email to:', to);
 
-    const result = useApi
-      ? await sendViaBrevoApi({
-          to,
+    const response = await fetch(
+      'https://api.brevo.com/v3/smtp/email',
+      {
+        method: 'POST',
+        headers: {
+          accept: 'application/json',
+          'content-type': 'application/json',
+          'api-key': process.env.BREVO_API_KEY
+        },
+        body: JSON.stringify({
+          sender: {
+            name: fromName,
+            email: fromEmail
+          },
+          to: [
+            {
+              email: to
+            }
+          ],
           subject,
-          html,
-          text
+          htmlContent: html,
+          textContent: text
         })
-      : await sendViaSmtp({
-          to,
-          subject,
-          html,
-          text
-        });
+      }
+    );
 
-    console.log('✅ Email sent successfully');
+    if (!response.ok) {
+      const body = await response.text();
+      throw new Error(
+        `Brevo API ${response.status}: ${body}`
+      );
+    }
+
+    const result = await response.json();
+
+    console.log('✅ Email sent');
+    console.log(result);
 
     return result;
+
   } catch (error) {
     console.error(
       '❌ EMAIL SEND ERROR:',
@@ -162,9 +82,9 @@ async function sendMail({
   }
 }
 
-// ---------------------------------------------------------------------
-// Verification email
-// ---------------------------------------------------------------------
+// -----------------------------------------------------
+// Email verification
+// -----------------------------------------------------
 
 async function sendVerificationEmail(
   to,
@@ -172,9 +92,7 @@ async function sendVerificationEmail(
 ) {
   return sendMail({
     to,
-    subject: `Verify your ${
-      process.env.APP_NAME || 'account'
-    }`,
+    subject: `Verify your ${process.env.APP_NAME || 'account'}`,
 
     html: `
       <div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;padding:20px;">
@@ -219,7 +137,7 @@ async function sendVerificationEmail(
     `,
 
     text: `
-Verify your account by visiting:
+Verify your account:
 
 ${verificationLink}
 
@@ -228,9 +146,9 @@ This link expires in 24 hours.
   });
 }
 
-// ---------------------------------------------------------------------
-// Password reset email
-// ---------------------------------------------------------------------
+// -----------------------------------------------------
+// Password reset
+// -----------------------------------------------------
 
 async function sendPasswordResetEmail(
   to,
@@ -238,9 +156,7 @@ async function sendPasswordResetEmail(
 ) {
   return sendMail({
     to,
-    subject: `Reset your ${
-      process.env.APP_NAME || 'account'
-    } password`,
+    subject: `Reset your ${process.env.APP_NAME || 'account'} password`,
 
     html: `
       <div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;padding:20px;">
@@ -294,7 +210,6 @@ This link expires in 1 hour.
 }
 
 module.exports = {
-  transporter,
   sendMail,
   sendVerificationEmail,
   sendPasswordResetEmail
