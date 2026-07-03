@@ -109,7 +109,8 @@ router.post(
     body('username').trim().matches(User.USERNAME_PATTERN),
     body('email').trim().isEmail().normalizeEmail(),
     body('password').isLength({ min: 8 }),
-    body('confirmPassword').custom((v, { req }) => v === req.body.password)
+    body('confirmPassword').custom((v, { req }) => v === req.body.password),
+    body('agreeTerms').equals('on').withMessage('You must agree to the Terms & Conditions and Privacy Policy to create an account.')
   ],
   async (req, res) => {
     const errors = validationResult(req);
