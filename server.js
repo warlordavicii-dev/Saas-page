@@ -9,6 +9,7 @@ const { attachUser } = require('./middleware/auth');
 const authRoutes = require('./routes/auth');
 const settingsRoutes = require('./routes/settings');
 const fundsRoutes = require('./routes/funds');
+const communityRoutes = require('./routes/community');
 
 const app = express();
 
@@ -58,6 +59,7 @@ app.get('/privacy', (req, res) => {
 app.use('/', authRoutes);
 app.use('/', settingsRoutes);
 app.use('/', fundsRoutes);
+app.use('/', communityRoutes);
 
 // 404
 app.use((req, res) => {
