@@ -102,11 +102,16 @@ router.post(
 
       return res.redirect(checkoutUrl);
     } catch (err) {
-      console.error('Deposit initiation failed:', err.message);
-      await Transaction.markFailed(txRef, err.message);
-      req.flash('error', 'Could not start the deposit. Please try again.');
-      return res.redirect('/funds');
-    }
+  console.error('Deposit initiation failed');
+  console.error(err);
+  console.error(err.message);
+
+  await Transaction.markFailed(txRef, err.message);
+
+  req.flash('error', err.message);
+
+  return res.redirect('/funds');
+}
   }
 );
 
