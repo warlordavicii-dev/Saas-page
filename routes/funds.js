@@ -1,150 +1,243 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <%- include('partials/head') %>
-</head>
-<body>
-  <div class="app-shell">
-    <%- include('partials/sidebar', { active: 'funds' }) %>
+const express = require('express');
+const router = express.Router();
+const crypto = require('crypto');
+const { body, validationResult } = require('express-validator');
 
-    <main class="main-content">
-    <div class="content-inner">
+const { requireAuth } = require('../middleware/auth');
+const Wallet = require('../models/Wallet');
+const Transaction = require('../models/Transaction');
+const isend = require('../utils/intasend');
 
-    <%- include('partials/flash') %>
-    <%- include('partials/back-button') %>
+const MIN_AMOUNT_KES = 10;
+const MAX_AMOUNT_KES = 150000; // adjust to your KYC tier's limits
 
-    <div class="panel balance-panel">
-      <span class="balance-label">Available balance</span>
-      <div class="balance-amount">
-        KES <%= (wallet.balance_cents / 100).toLocaleString('en-KE', { minimumFractionDigits: 2 }) %>
-      </div>
-    </div>
+function toCents(kes) {
+  return Math.round(Number(kes) * 100);
+}
 
-    <div class="funds-grid">
-      <div class="panel">
-        <h2>Deposit</h2>
-        <p class="desc">Add funds via M-Pesa STK push, or bank transfer / card through a secure checkout.</p>
+function newTxRef(prefix) {
+  return `${prefix}-${crypto.randomUUID()}`;
+}
 
-        <form method="POST" action="/funds/deposit" class="funds-form" id="deposit-form">
-          <div class="field">
-            <label for="deposit-channel">Channel</label>
-            <select id="deposit-channel" name="channel" required>
-              <option value="mpesa">M-Pesa</option>
-              <option value="bank">Bank / Card</option>
-            </select>
-          </div>
+// ---------- FUNDS DASHBOARD ----------
+router.get('/funds', requireAuth, async (req, res) => {
+  // If the person is bouncing back from a hosted checkout redirect, confirm
+  // that specific transaction now rather than waiting for the webhook.
+  const { invoice_id } = req.query;
+  if (invoice_id) {
+    await confirmDepositByInvoice(invoice_id).catch((err) => {
+      console.error('Deposit confirmation on redirect failed:', err.message);
+    });
+  }
 
-          <div class="field" id="deposit-phone-field">
-            <label for="deposit-phone">Phone number</label>
-            <input type="text" id="deposit-phone" name="phone" placeholder="2547XXXXXXXX">
-          </div>
+  const wallet = await Wallet.getOrCreate(req.user.id);
+  const transactions = await Transaction.listForUser(req.user.id, 20);
 
-          <div class="field">
-            <label for="deposit-amount">Amount (KES)</label>
-            <input type="number" id="deposit-amount" name="amount" min="<%= minAmount %>" max="<%= maxAmount %>" step="1" placeholder="e.g. 500" required>
-            <p class="hint">Min KES <%= minAmount %>, max KES <%= maxAmount.toLocaleString() %></p>
-          </div>
+  res.render('funds', {
+    title: 'Funds',
+    wallet,
+    transactions,
+    minAmount: MIN_AMOUNT_KES,
+    maxAmount: MAX_AMOUNT_KES
+  });
+});
 
-          <button class="btn btn-primary" type="submit">Deposit</button>
-        </form>
-      </div>
+// ---------- DEPOSIT ----------
+router.post(
+  '/funds/deposit',
+  requireAuth,
+  [
+    body('channel').isIn(['mpesa', 'bank']),
+    body('amount').isFloat({ min: MIN_AMOUNT_KES, max: MAX_AMOUNT_KES }),
+    body('phone')
+      .if(body('channel').equals('mpesa'))
+      .matches(/^2547\d{8}$|^2541\d{8}$/)
+      .withMessage('Enter phone as 2547XXXXXXXX or 2541XXXXXXXX')
+  ],
+  async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      errors.array().forEach((e) => req.flash('error', e.msg));
+      return res.redirect('/funds');
+    }
 
-      <div class="panel">
-        <h2>Withdraw</h2>
-        <p class="desc">Send funds to your M-Pesa or a Kenyan bank account (via PesaLink).</p>
+    const { channel, phone } = req.body;
+    const amountKES = Number(req.body.amount);
+    const txRef = newTxRef('DEP');
 
-        <form method="POST" action="/funds/withdraw" class="funds-form" id="withdraw-form">
-          <div class="field">
-            <label for="withdraw-channel">Channel</label>
-            <select id="withdraw-channel" name="channel" required>
-              <option value="mpesa">M-Pesa</option>
-              <option value="bank">Bank</option>
-            </select>
-          </div>
+    try {
+      await Transaction.create({
+        userId: req.user.id,
+        type: 'deposit',
+        channel,
+        amountCents: toCents(amountKES),
+        txRef,
+        destination: channel === 'bank' ? 'hosted-checkout' : phone
+      });
 
-          <div class="field" id="withdraw-bankcode-field" style="display:none;">
-            <label for="withdraw-bankcode">Bank code</label>
-            <input type="text" id="withdraw-bankcode" name="bankCode" placeholder="e.g. 11 (see IntaSend bank code list)">
-          </div>
-
-          <div class="field">
-            <label for="withdraw-account">Phone / account number</label>
-            <input type="text" id="withdraw-account" name="accountNumber" placeholder="2547XXXXXXXX or account no." required>
-          </div>
-
-          <div class="field">
-            <label for="withdraw-amount">Amount (KES)</label>
-            <input type="number" id="withdraw-amount" name="amount" min="<%= minAmount %>" max="<%= maxAmount %>" step="1" placeholder="e.g. 500" required>
-            <p class="hint">Available: KES <%= (wallet.balance_cents / 100).toLocaleString('en-KE', { minimumFractionDigits: 2 }) %></p>
-          </div>
-
-          <button class="btn btn-primary" type="submit">Withdraw</button>
-        </form>
-      </div>
-    </div>
-
-    <div class="panel">
-      <h2>Recent transactions</h2>
-      <% if (transactions.length === 0) { %>
-        <p class="desc">No transactions yet.</p>
-      <% } else { %>
-        <div class="tx-table-wrap">
-          <table class="tx-table">
-            <thead>
-              <tr>
-                <th>Date</th>
-                <th>Type</th>
-                <th>Channel</th>
-                <th>Amount</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              <% transactions.forEach(function (tx) { %>
-                <tr>
-                  <td><%= new Date(tx.created_at).toLocaleString('en-KE', { dateStyle: 'medium', timeStyle: 'short' }) %></td>
-                  <td class="tx-type-<%= tx.type %>"><%= tx.type === 'deposit' ? 'Deposit' : 'Withdrawal' %></td>
-                  <td><%= tx.channel.toUpperCase() %></td>
-                  <td>KES <%= (tx.amount_cents / 100).toLocaleString('en-KE', { minimumFractionDigits: 2 }) %></td>
-                  <td><span class="tx-status tx-status-<%= tx.status %>"><%= tx.status %></span></td>
-                </tr>
-              <% }); %>
-            </tbody>
-          </table>
-        </div>
-      <% } %>
-    </div>
-
-    </div>
-    </main>
-  </div>
-
-  <script>
-    (function () {
-      const depositChannel = document.getElementById('deposit-channel');
-      const depositPhoneField = document.getElementById('deposit-phone-field');
-      const depositPhone = document.getElementById('deposit-phone');
-
-      function syncDepositPhone() {
-        const needsPhone = depositChannel.value !== 'bank';
-        depositPhoneField.style.display = needsPhone ? '' : 'none';
-        depositPhone.required = needsPhone;
+      if (channel === 'mpesa') {
+        await isend.chargeMpesaSTK({
+          txRef,
+          amount: amountKES,
+          phoneNumber: phone
+        });
+        req.flash('success', 'Check your phone to approve the payment prompt.');
+        return res.redirect('/funds');
       }
-      depositChannel.addEventListener('change', syncDepositPhone);
-      syncDepositPhone();
 
-      const withdrawChannel = document.getElementById('withdraw-channel');
-      const withdrawBankField = document.getElementById('withdraw-bankcode-field');
-      const withdrawBankCode = document.getElementById('withdraw-bankcode');
+      // Bank / card -> hosted checkout, IntaSend redirects back to /funds
+      const redirectUrl = `${process.env.APP_URL}/funds`;
+      const checkout = await isend.createHostedCheckout({
+        txRef,
+        amount: amountKES,
+        email: req.user.email,
+        name: req.user.name,
+        redirectUrl
+      });
 
-      function syncWithdrawBank() {
-        const isBank = withdrawChannel.value === 'bank';
-        withdrawBankField.style.display = isBank ? '' : 'none';
-        withdrawBankCode.required = isBank;
+      const checkoutUrl = checkout.url || (checkout.data && checkout.data.url);
+      if (!checkoutUrl) {
+        throw new Error('IntaSend did not return a checkout link');
       }
-      withdrawChannel.addEventListener('change', syncWithdrawBank);
-      syncWithdrawBank();
-    })();
-  </script>
-</body>
-</html>
+
+      return res.redirect(checkoutUrl);
+    } catch (err) {
+      console.error('Deposit initiation failed:', err.message);
+      await Transaction.markFailed(txRef, err.message);
+      req.flash('error', 'Could not start the deposit. Please try again.');
+      return res.redirect('/funds');
+    }
+  }
+);
+
+// ---------- WITHDRAW ----------
+router.post(
+  '/funds/withdraw',
+  requireAuth,
+  [
+    body('channel').isIn(['mpesa', 'bank']),
+    body('amount').isFloat({ min: MIN_AMOUNT_KES, max: MAX_AMOUNT_KES }),
+    body('accountNumber').trim().notEmpty().withMessage('Enter a phone number or account number'),
+    body('bankCode')
+      .if(body('channel').equals('bank'))
+      .trim()
+      .notEmpty()
+      .withMessage('Enter your bank code')
+  ],
+  async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      errors.array().forEach((e) => req.flash('error', e.msg));
+      return res.redirect('/funds');
+    }
+
+    const { channel, accountNumber } = req.body;
+    const amountKES = Number(req.body.amount);
+    const amountCents = toCents(amountKES);
+    const txRef = newTxRef('WD');
+
+    const hasFunds = await Wallet.debitIfSufficient(req.user.id, amountCents);
+    if (!hasFunds) {
+      req.flash('error', 'Insufficient balance for that withdrawal.');
+      return res.redirect('/funds');
+    }
+
+    try {
+      await Transaction.create({
+        userId: req.user.id,
+        type: 'withdrawal',
+        channel,
+        amountCents,
+        txRef,
+        destination: accountNumber
+      });
+
+      await isend.initiateTransfer({
+        txRef,
+        amount: amountKES,
+        channel,
+        accountNumber,
+        bankCode: channel === 'bank' ? req.body.bankCode : undefined,
+        beneficiaryName: req.user.name
+      });
+
+      req.flash('success', 'Withdrawal is processing — it may take a few minutes.');
+    } catch (err) {
+      console.error('Withdrawal failed:', err.message);
+      await Transaction.markFailed(txRef, err.message);
+      await Wallet.refund(req.user.id, amountCents);
+      req.flash('error', 'Withdrawal could not be processed. Your balance has been restored.');
+    }
+
+    res.redirect('/funds');
+  }
+);
+
+// ---------- SHARED CONFIRMATION LOGIC (deposits) ----------
+// Always re-verifies against IntaSend's own record before crediting — never
+// trusts a webhook payload or redirect query string by itself.
+async function confirmDepositByInvoice(invoiceId) {
+  const info = await isend.verifyPayment(invoiceId);
+  const txRef = info.api_ref;
+  if (!txRef) return;
+
+  const txn = await Transaction.findByRef(txRef);
+  if (!txn || txn.status !== 'pending') return; // already handled, or unknown ref
+
+  const amountMatches = Math.round(Number(info.value ?? info.net_amount ?? 0) * 100) === Number(txn.amount_cents);
+  const isGood = info.state === 'COMPLETE' && info.currency === 'KES' && amountMatches;
+
+  if (isGood) {
+    await Wallet.credit(txn.user_id, txn.amount_cents);
+    await Transaction.markSuccessful(txRef, String(invoiceId));
+  } else if (info.state === 'FAILED') {
+    await Transaction.markFailed(txRef, info.failed_reason || `Payment failed with state: ${info.state}`);
+  }
+  // PENDING / PROCESSING states are left as-is; a later webhook call or
+  // redirect check will resolve them.
+}
+
+// ---------- INTASEND WEBHOOK ----------
+// Registered without requireAuth — IntaSend calls this directly.
+// Mount this router's raw path in server.js BEFORE any auth-only middleware
+// blocks it. IntaSend signs webhooks with a "challenge" string you set in
+// your dashboard, sent back verbatim on every event — compare it here.
+router.post('/webhooks/intasend', express.json(), async (req, res) => {
+  const payload = req.body;
+
+  if (!payload.challenge || payload.challenge !== process.env.INTASEND_WEBHOOK_CHALLENGE) {
+    return res.status(401).send('Invalid signature');
+  }
+
+  try {
+    if (payload.invoice_id && payload.state) {
+      // Payment collection (deposit) event
+      await confirmDepositByInvoice(payload.invoice_id);
+    } else if (Array.isArray(payload.transactions)) {
+      // Send money (withdrawal) event
+      for (const t of payload.transactions) {
+        const txRef = t.idempotency_key;
+        if (!txRef) continue;
+
+        const txn = await Transaction.findByRef(txRef);
+        if (!txn || txn.status !== 'pending') continue;
+
+        const status = String(t.status || '').toLowerCase();
+        if (status === 'successful') {
+          await Transaction.markSuccessful(txRef, t.transaction_id || t.provider_reference);
+        } else if (status === 'failed') {
+          await Transaction.markFailed(txRef, t.status_description || 'Transfer failed at provider');
+          await Wallet.refund(txn.user_id, txn.amount_cents);
+        }
+      }
+    }
+    res.status(200).send('OK');
+  } catch (err) {
+    console.error('Webhook handling error:', err.message);
+    // Still 200 so IntaSend doesn't hammer retries for a problem on our end
+    // that a human needs to look at; the error is already logged above.
+    res.status(200).send('logged');
+  }
+});
+
+module.exports = router;
