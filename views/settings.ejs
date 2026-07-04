@@ -7,22 +7,18 @@
   <div class="hacklink-bg" id="hacklink-bg"></div>
   <div class="hacklink-pulse" id="hacklink-pulse"></div>
 
-  <div class="settings-wrap">
-    <div class="settings-header">
-      <%- include('partials/brand') %>
-      <div class="header-actions">
-        <a href="/community" class="btn btn-secondary" style="width:auto;padding:9px 16px;">Community</a>
-        <a href="/assistant" class="btn btn-secondary" style="width:auto;padding:9px 16px;">Assistant</a>
-        <a href="/funds" class="btn btn-secondary" style="width:auto;padding:9px 16px;">Funds</a>
-        <form class="logout-form" method="POST" action="/logout">
-          <button class="btn btn-secondary" type="submit" style="width:auto;padding:9px 16px;">Log out</button>
-        </form>
-        <div class="menu-wrap">
-          <button class="menu-btn" id="menu-btn" aria-label="Open menu" aria-haspopup="true" aria-expanded="false">&#8942;</button>
-          <div class="dropdown" id="dropdown">
-            <button id="open-about" type="button">About</button>
-            <button id="open-settings" type="button">Settings</button>
-          </div>
+  <div class="app-shell">
+    <%- include('partials/sidebar', { active: 'settings' }) %>
+
+    <main class="main-content">
+    <div class="content-inner">
+
+    <div class="settings-header" style="justify-content:flex-end;">
+      <div class="menu-wrap">
+        <button class="menu-btn" id="menu-btn" aria-label="Open menu" aria-haspopup="true" aria-expanded="false">&#8942;</button>
+        <div class="dropdown" id="dropdown">
+          <button id="open-about" type="button">About</button>
+          <button id="open-settings" type="button">Settings</button>
         </div>
       </div>
     </div>
@@ -159,6 +155,9 @@
         </a>
       </nav>
     </div>
+
+    </div>
+    </main>
   </div>
 
   <div class="modal-overlay" id="about-overlay">
