@@ -4,18 +4,11 @@
   <%- include('partials/head') %>
 </head>
 <body>
-  <div class="settings-wrap">
-    <div class="settings-header">
-      <%- include('partials/brand') %>
-      <div class="header-actions">
-        <a href="/settings" class="btn btn-secondary" style="width:auto;padding:9px 16px;">Dashboard</a>
-        <a href="/funds" class="btn btn-secondary" style="width:auto;padding:9px 16px;">Funds</a>
-        <a href="/community" class="btn btn-secondary" style="width:auto;padding:9px 16px;">Community</a>
-        <form class="logout-form" method="POST" action="/logout">
-          <button class="btn btn-secondary" type="submit" style="width:auto;padding:9px 16px;">Log out</button>
-        </form>
-      </div>
-    </div>
+  <div class="app-shell">
+    <%- include('partials/sidebar', { active: 'assistant' }) %>
+
+    <main class="main-content">
+    <div class="content-inner">
 
     <%- include('partials/flash') %>
 
@@ -47,6 +40,9 @@
       </form>
       <button type="button" id="assistant-reset-btn" class="chat-reply-btn" style="margin-top:6px;">Start a new conversation</button>
     </div>
+
+    </div>
+    </main>
   </div>
 
   <script>
