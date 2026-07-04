@@ -55,6 +55,22 @@ CREATE TABLE IF NOT EXISTS transactions (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 `;
 
+// utf8mb4 is required (not just plain utf8) so 4-byte characters like emoji
+// can actually be stored without getting silently truncated or erroring out.
+const createCommunityMessagesTable = `
+CREATE TABLE IF NOT EXISTS community_messages (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  user_id INT NOT NULL,
+  username VARCHAR(32) NOT NULL,
+  body VARCHAR(1000) NOT NULL,
+  reply_to_id INT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_community_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  CONSTRAINT fk_community_reply FOREIGN KEY (reply_to_id) REFERENCES community_messages(id) ON DELETE SET NULL,
+  INDEX idx_community_created (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+`;
+
 // Adds the username column for anyone who already has this table from
 // before username support existed. Older MySQL builds (like many free
 // hosts) don't support "ADD COLUMN IF NOT EXISTS", so we check first.
@@ -106,7 +122,8 @@ async function ensureProviderTransactionIdColumn() {
     await pool.query(createWalletsTable);
     await pool.query(createTransactionsTable);
     await ensureProviderTransactionIdColumn();
-    console.log('✔ users, wallets, and transactions tables are ready.');
+    await pool.query(createCommunityMessagesTable);
+    console.log('✔ users, wallets, transactions, and community_messages tables are ready.');
     process.exit(0);
   } catch (err) {
     console.error('✘ Failed to initialize database:', err.message);
