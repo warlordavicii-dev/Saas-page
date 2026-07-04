@@ -14,6 +14,7 @@
     <div class="content-inner">
 
     <%- include('partials/flash') %>
+    <%- include('partials/back-button') %>
 
     <div class="panel">
       <h2>Welcome back, <%= user.name.split(' ')[0] %> 👋</h2>
@@ -143,31 +144,6 @@
         <button class="btn btn-primary" type="submit">Update password</button>
       </form>
     </div>
-    <div class="panel" id="links-panel">
-      <h2>Community &amp; support</h2>
-      <p class="desc">Reach the VaultGate team or join the community.</p>
-      <nav class="links-grid" aria-label="Community and support links">
-        <a class="link-btn" href="https://whatsapp.com/channel/0029Vb6jxRD7IUYbQfokIu2s" target="_blank" rel="noopener noreferrer" aria-label="WhatsApp channel (opens in a new tab)">
-          <i class="fab fa-whatsapp" aria-hidden="true"></i> WhatsApp channel
-        </a>
-        <a class="link-btn" href="https://whatsapp.com/channel/0029Vb62TDsAYlUBrGoU1y3S" target="_blank" rel="noopener noreferrer" aria-label="WhatsApp backup channel (opens in a new tab)">
-          <i class="fab fa-whatsapp" aria-hidden="true"></i> Backup channel
-        </a>
-        <a class="link-btn" href="https://chat.whatsapp.com/IWTPLw7WogG0sc5L4u2syz?mode=ac_t" target="_blank" rel="noopener noreferrer" aria-label="WhatsApp group (opens in a new tab)">
-          <i class="fab fa-whatsapp" aria-hidden="true"></i> WhatsApp group
-        </a>
-        <a class="link-btn" href="https://wa.me/254769677305" target="_blank" rel="noopener noreferrer" aria-label="Contact support on WhatsApp (opens in a new tab)">
-          <i class="fas fa-headset" aria-hidden="true"></i> Contact support
-        </a>
-        <a class="link-btn" href="https://wa.me/254740368834" target="_blank" rel="noopener noreferrer" aria-label="Contact Artisan Due on WhatsApp (opens in a new tab)">
-          <i class="fas fa-headset" aria-hidden="true"></i> Contact Artisan Due
-        </a>
-        <a class="link-btn" href="https://wa.me/254788409105" target="_blank" rel="noopener noreferrer" aria-label="Contact Nicky on WhatsApp (opens in a new tab)">
-          <i class="fas fa-headset" aria-hidden="true"></i> Contact Nicky
-        </a>
-      </nav>
-    </div>
-
     </div>
     </main>
   </div>
