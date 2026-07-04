@@ -844,6 +844,12 @@ a:hover { text-decoration: underline; }
   background: rgba(201, 162, 75, 0.08);
 }
 
+.chat-msg-bot {
+  align-self: flex-start;
+  border-color: var(--border);
+  background: var(--surface-2);
+}
+
 .chat-msg-head {
   display: flex;
   align-items: baseline;
