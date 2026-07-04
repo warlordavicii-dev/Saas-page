@@ -45,7 +45,7 @@ CREATE TABLE IF NOT EXISTS transactions (
   currency VARCHAR(3) NOT NULL DEFAULT 'KES',
   status ENUM('pending', 'successful', 'failed') NOT NULL DEFAULT 'pending',
   tx_ref VARCHAR(64) NOT NULL UNIQUE,
-  flw_transaction_id VARCHAR(64) NULL,
+  provider_transaction_id VARCHAR(64) NULL,
   destination VARCHAR(190) NULL,
   failure_reason VARCHAR(255) NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -77,6 +77,27 @@ async function ensureUsernameColumn() {
   await pool.query('ALTER TABLE users ADD UNIQUE KEY uniq_username (username)');
 }
 
+// Anyone who deployed this app while it still used Flutterwave will have a
+// `flw_transaction_id` column. We've moved to a provider-agnostic name since
+// switching to IntaSend; rename it in place instead of losing the history.
+async function ensureProviderTransactionIdColumn() {
+  const [rows] = await pool.query(
+    `SELECT COLUMN_NAME FROM information_schema.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'transactions'
+       AND COLUMN_NAME IN ('provider_transaction_id', 'flw_transaction_id')`
+  );
+  const columns = rows.map((r) => r.COLUMN_NAME);
+  if (columns.includes('provider_transaction_id')) return;
+
+  if (columns.includes('flw_transaction_id')) {
+    console.log('Renaming "flw_transaction_id" column to "provider_transaction_id"...');
+    await pool.query('ALTER TABLE transactions CHANGE flw_transaction_id provider_transaction_id VARCHAR(64) NULL');
+  } else {
+    console.log('Adding missing "provider_transaction_id" column...');
+    await pool.query('ALTER TABLE transactions ADD COLUMN provider_transaction_id VARCHAR(64) NULL AFTER tx_ref');
+  }
+}
+
 (async () => {
   try {
     console.log('Connecting to database...');
@@ -84,6 +105,7 @@ async function ensureUsernameColumn() {
     await ensureUsernameColumn();
     await pool.query(createWalletsTable);
     await pool.query(createTransactionsTable);
+    await ensureProviderTransactionIdColumn();
     console.log('✔ users, wallets, and transactions tables are ready.');
     process.exit(0);
   } catch (err) {
