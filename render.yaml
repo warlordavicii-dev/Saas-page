@@ -40,11 +40,11 @@ services:
         sync: false
       - key: BREVO_API_KEY
         sync: false
-      - key: FLW_PUBLIC_KEY
+      - key: INTASEND_PUBLISHABLE_KEY
         sync: false
-      - key: FLW_SECRET_KEY
+      - key: INTASEND_SECRET_KEY
         sync: false
-      - key: FLW_ENCRYPTION_KEY
+      - key: INTASEND_WEBHOOK_CHALLENGE
         sync: false
-      - key: FLW_WEBHOOK_SECRET_HASH
-        sync: false
+      - key: INTASEND_TEST_MODE
+        value: false
