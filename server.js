@@ -6,11 +6,14 @@ const session = require('express-session');
 const path = require('path');
 
 const { attachUser } = require('./middleware/auth');
+const Wallet = require('./models/Wallet');
 const authRoutes = require('./routes/auth');
+const dashboardRoutes = require('./routes/dashboard');
 const settingsRoutes = require('./routes/settings');
 const fundsRoutes = require('./routes/funds');
 const communityRoutes = require('./routes/community');
 const assistantRoutes = require('./routes/assistant');
+const aboutRoutes = require('./routes/about');
 
 const app = express();
 
@@ -48,8 +51,22 @@ app.use((req, res, next) => {
 
 app.use(attachUser);
 
+// Makes the wallet balance available to the sidebar on every authenticated
+// page, so pages don't each need to fetch and pass it individually.
+app.use(async (req, res, next) => {
+  if (!req.user) return next();
+  try {
+    const wallet = await Wallet.getOrCreate(req.user.id);
+    res.locals.walletBalance = wallet.balance_cents;
+  } catch (err) {
+    console.error('Failed to load wallet balance for sidebar:', err.message);
+    res.locals.walletBalance = 0;
+  }
+  next();
+});
+
 app.get('/', (req, res) => {
-  if (req.user) return res.redirect('/settings');
+  if (req.user) return res.redirect('/dashboard');
   res.render('landing', { title: 'Welcome' });
 });
 
@@ -62,10 +79,12 @@ app.get('/privacy', (req, res) => {
 });
 
 app.use('/', authRoutes);
+app.use('/', dashboardRoutes);
 app.use('/', settingsRoutes);
 app.use('/', fundsRoutes);
 app.use('/', communityRoutes);
 app.use('/', assistantRoutes);
+app.use('/', aboutRoutes);
 
 // 404
 app.use((req, res) => {
