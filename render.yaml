@@ -48,3 +48,7 @@ services:
         sync: false
       - key: INTASEND_TEST_MODE
         value: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: ANTHROPIC_MODEL
+        value: claude-haiku-4-5-20251001
