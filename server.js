@@ -8,6 +8,7 @@ const path = require('path');
 const { attachUser } = require('./middleware/auth');
 const authRoutes = require('./routes/auth');
 const settingsRoutes = require('./routes/settings');
+const fundsRoutes = require('./routes/funds');
 
 const app = express();
 
@@ -56,6 +57,7 @@ app.get('/privacy', (req, res) => {
 
 app.use('/', authRoutes);
 app.use('/', settingsRoutes);
+app.use('/', fundsRoutes);
 
 // 404
 app.use((req, res) => {
