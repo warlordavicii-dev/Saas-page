@@ -6,7 +6,7 @@ const { body, validationResult } = require('express-validator');
 const { requireAuth } = require('../middleware/auth');
 const Wallet = require('../models/Wallet');
 const Transaction = require('../models/Transaction');
-const flw = require('../utils/flutterwave');
+const isend = require('../utils/intasend');
 
 const MIN_AMOUNT_KES = 10;
 const MAX_AMOUNT_KES = 150000; // adjust to your KYC tier's limits
@@ -23,9 +23,9 @@ function newTxRef(prefix) {
 router.get('/funds', requireAuth, async (req, res) => {
   // If the person is bouncing back from a hosted checkout redirect, confirm
   // that specific transaction now rather than waiting for the webhook.
-  const { tx_ref, transaction_id } = req.query;
-  if (tx_ref && transaction_id) {
-    await confirmDeposit(tx_ref, transaction_id).catch((err) => {
+  const { invoice_id } = req.query;
+  if (invoice_id) {
+    await confirmDepositByInvoice(invoice_id).catch((err) => {
       console.error('Deposit confirmation on redirect failed:', err.message);
     });
   }
@@ -47,10 +47,10 @@ router.post(
   '/funds/deposit',
   requireAuth,
   [
-    body('channel').isIn(['mpesa', 'airtel', 'bank']),
+    body('channel').isIn(['mpesa', 'bank']),
     body('amount').isFloat({ min: MIN_AMOUNT_KES, max: MAX_AMOUNT_KES }),
     body('phone')
-      .if(body('channel').isIn(['mpesa', 'airtel']))
+      .if(body('channel').equals('mpesa'))
       .matches(/^2547\d{8}$|^2541\d{8}$/)
       .withMessage('Enter phone as 2547XXXXXXXX or 2541XXXXXXXX')
   ],
@@ -75,21 +75,19 @@ router.post(
         destination: channel === 'bank' ? 'hosted-checkout' : phone
       });
 
-      if (channel === 'mpesa' || channel === 'airtel') {
-        await flw.chargeMobileMoneyKE({
+      if (channel === 'mpesa') {
+        await isend.chargeMpesaSTK({
           txRef,
           amount: amountKES,
-          email: req.user.email,
-          phoneNumber: phone,
-          name: req.user.name
+          phoneNumber: phone
         });
         req.flash('success', 'Check your phone to approve the payment prompt.');
         return res.redirect('/funds');
       }
 
-      // Bank / card -> hosted checkout, Flutterwave redirects back to /funds
+      // Bank / card -> hosted checkout, IntaSend redirects back to /funds
       const redirectUrl = `${process.env.APP_URL}/funds`;
-      const checkout = await flw.createHostedCheckout({
+      const checkout = await isend.createHostedCheckout({
         txRef,
         amount: amountKES,
         email: req.user.email,
@@ -97,7 +95,12 @@ router.post(
         redirectUrl
       });
 
-      return res.redirect(checkout.data.link);
+      const checkoutUrl = checkout.url || (checkout.data && checkout.data.url);
+      if (!checkoutUrl) {
+        throw new Error('IntaSend did not return a checkout link');
+      }
+
+      return res.redirect(checkoutUrl);
     } catch (err) {
       console.error('Deposit initiation failed:', err.message);
       await Transaction.markFailed(txRef, err.message);
@@ -112,7 +115,7 @@ router.post(
   '/funds/withdraw',
   requireAuth,
   [
-    body('channel').isIn(['mpesa', 'airtel', 'bank']),
+    body('channel').isIn(['mpesa', 'bank']),
     body('amount').isFloat({ min: MIN_AMOUNT_KES, max: MAX_AMOUNT_KES }),
     body('accountNumber').trim().notEmpty().withMessage('Enter a phone number or account number'),
     body('bankCode')
@@ -132,7 +135,6 @@ router.post(
     const amountKES = Number(req.body.amount);
     const amountCents = toCents(amountKES);
     const txRef = newTxRef('WD');
-    const bankCode = channel === 'mpesa' ? 'MPS' : channel === 'airtel' ? 'AIRTEL' : req.body.bankCode;
 
     const hasFunds = await Wallet.debitIfSufficient(req.user.id, amountCents);
     if (!hasFunds) {
@@ -150,13 +152,13 @@ router.post(
         destination: accountNumber
       });
 
-      await flw.initiateTransfer({
+      await isend.initiateTransfer({
         txRef,
         amount: amountKES,
-        bankCode,
+        channel,
         accountNumber,
-        beneficiaryName: req.user.name,
-        senderName: req.user.name
+        bankCode: channel === 'bank' ? req.body.bankCode : undefined,
+        beneficiaryName: req.user.name
       });
 
       req.flash('success', 'Withdrawal is processing — it may take a few minutes.');
@@ -171,52 +173,60 @@ router.post(
   }
 );
 
-// ---------- SHARED CONFIRMATION LOGIC ----------
-// Always re-verifies against Flutterwave's own record before crediting —
-// never trusts a webhook payload or redirect query string by itself.
-async function confirmDeposit(txRef, flwTransactionId) {
+// ---------- SHARED CONFIRMATION LOGIC (deposits) ----------
+// Always re-verifies against IntaSend's own record before crediting — never
+// trusts a webhook payload or redirect query string by itself.
+async function confirmDepositByInvoice(invoiceId) {
+  const info = await isend.verifyPayment(invoiceId);
+  const txRef = info.api_ref;
+  if (!txRef) return;
+
   const txn = await Transaction.findByRef(txRef);
   if (!txn || txn.status !== 'pending') return; // already handled, or unknown ref
 
-  const verified = await flw.verifyTransaction(flwTransactionId);
-  const data = verified.data;
-
-  const amountMatches = Math.round(data.amount * 100) === Number(txn.amount_cents);
-  const isGood =
-    data.status === 'successful' &&
-    data.tx_ref === txRef &&
-    data.currency === 'KES' &&
-    amountMatches;
+  const amountMatches = Math.round(Number(info.value ?? info.net_amount ?? 0) * 100) === Number(txn.amount_cents);
+  const isGood = info.state === 'COMPLETE' && info.currency === 'KES' && amountMatches;
 
   if (isGood) {
     await Wallet.credit(txn.user_id, txn.amount_cents);
-    await Transaction.markSuccessful(txRef, String(data.id));
-  } else {
-    await Transaction.markFailed(txRef, `Verification mismatch or failed status: ${data.status}`);
+    await Transaction.markSuccessful(txRef, String(invoiceId));
+  } else if (info.state === 'FAILED') {
+    await Transaction.markFailed(txRef, info.failed_reason || `Payment failed with state: ${info.state}`);
   }
+  // PENDING / PROCESSING states are left as-is; a later webhook call or
+  // redirect check will resolve them.
 }
 
-// ---------- FLUTTERWAVE WEBHOOK ----------
-// Registered without requireAuth — Flutterwave calls this directly.
-// Mount this router's raw path in server.js BEFORE any auth-only middleware blocks it.
-router.post('/webhooks/flutterwave', express.json(), async (req, res) => {
-  const signature = req.headers['verif-hash'];
-  if (!signature || signature !== process.env.FLW_WEBHOOK_SECRET_HASH) {
+// ---------- INTASEND WEBHOOK ----------
+// Registered without requireAuth — IntaSend calls this directly.
+// Mount this router's raw path in server.js BEFORE any auth-only middleware
+// blocks it. IntaSend signs webhooks with a "challenge" string you set in
+// your dashboard, sent back verbatim on every event — compare it here.
+router.post('/webhooks/intasend', express.json(), async (req, res) => {
+  const payload = req.body;
+
+  if (!payload.challenge || payload.challenge !== process.env.INTASEND_WEBHOOK_CHALLENGE) {
     return res.status(401).send('Invalid signature');
   }
 
-  const payload = req.body;
-
   try {
-    if (payload.event === 'charge.completed') {
-      await confirmDeposit(payload.data.tx_ref, payload.data.id);
-    } else if (payload.event === 'transfer.completed') {
-      const txn = await Transaction.findByRef(payload.data.reference);
-      if (txn && txn.status === 'pending') {
-        if (payload.data.status === 'SUCCESSFUL') {
-          await Transaction.markSuccessful(payload.data.reference, String(payload.data.id));
-        } else {
-          await Transaction.markFailed(payload.data.reference, 'Transfer failed at provider');
+    if (payload.invoice_id && payload.state) {
+      // Payment collection (deposit) event
+      await confirmDepositByInvoice(payload.invoice_id);
+    } else if (Array.isArray(payload.transactions)) {
+      // Send money (withdrawal) event
+      for (const t of payload.transactions) {
+        const txRef = t.idempotency_key;
+        if (!txRef) continue;
+
+        const txn = await Transaction.findByRef(txRef);
+        if (!txn || txn.status !== 'pending') continue;
+
+        const status = String(t.status || '').toLowerCase();
+        if (status === 'successful') {
+          await Transaction.markSuccessful(txRef, t.transaction_id || t.provider_reference);
+        } else if (status === 'failed') {
+          await Transaction.markFailed(txRef, t.status_description || 'Transfer failed at provider');
           await Wallet.refund(txn.user_id, txn.amount_cents);
         }
       }
@@ -224,7 +234,7 @@ router.post('/webhooks/flutterwave', express.json(), async (req, res) => {
     res.status(200).send('OK');
   } catch (err) {
     console.error('Webhook handling error:', err.message);
-    // Still 200 so Flutterwave doesn't hammer retries for a problem on our end
+    // Still 200 so IntaSend doesn't hammer retries for a problem on our end
     // that a human needs to look at; the error is already logged above.
     res.status(200).send('logged');
   }
