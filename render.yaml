@@ -4,7 +4,7 @@ services:
     runtime: node
     plan: free
     buildCommand: npm install
-    startCommand: node scripts/initDb.js && node server.js
+    startCommand: node scripts/initDB.js && node server.js
     envVars:
       - key: NODE_ENV
         value: production
@@ -39,4 +39,12 @@ services:
       - key: SMTP_FROM_EMAIL
         sync: false
       - key: BREVO_API_KEY
+        sync: false
+      - key: FLW_PUBLIC_KEY
+        sync: false
+      - key: FLW_SECRET_KEY
+        sync: false
+      - key: FLW_ENCRYPTION_KEY
+        sync: false
+      - key: FLW_WEBHOOK_SECRET_HASH
         sync: false
