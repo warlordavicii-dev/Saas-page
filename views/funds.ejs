@@ -27,14 +27,13 @@
     <div class="funds-grid">
       <div class="panel">
         <h2>Deposit</h2>
-        <p class="desc">Add funds via M-Pesa, Airtel Money, bank transfer, or card.</p>
+        <p class="desc">Add funds via M-Pesa STK push, or bank transfer / card through a secure checkout.</p>
 
         <form method="POST" action="/funds/deposit" class="funds-form" id="deposit-form">
           <div class="field">
             <label for="deposit-channel">Channel</label>
             <select id="deposit-channel" name="channel" required>
               <option value="mpesa">M-Pesa</option>
-              <option value="airtel">Airtel Money</option>
               <option value="bank">Bank / Card</option>
             </select>
           </div>
@@ -56,21 +55,20 @@
 
       <div class="panel">
         <h2>Withdraw</h2>
-        <p class="desc">Send funds to your M-Pesa, Airtel Money, or bank account.</p>
+        <p class="desc">Send funds to your M-Pesa or a Kenyan bank account (via PesaLink).</p>
 
         <form method="POST" action="/funds/withdraw" class="funds-form" id="withdraw-form">
           <div class="field">
             <label for="withdraw-channel">Channel</label>
             <select id="withdraw-channel" name="channel" required>
               <option value="mpesa">M-Pesa</option>
-              <option value="airtel">Airtel Money</option>
               <option value="bank">Bank</option>
             </select>
           </div>
 
           <div class="field" id="withdraw-bankcode-field" style="display:none;">
             <label for="withdraw-bankcode">Bank code</label>
-            <input type="text" id="withdraw-bankcode" name="bankCode" placeholder="e.g. 044 (see Flutterwave bank list)">
+            <input type="text" id="withdraw-bankcode" name="bankCode" placeholder="e.g. 11 (see IntaSend bank code list)">
           </div>
 
           <div class="field">
