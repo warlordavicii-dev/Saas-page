@@ -41,17 +41,30 @@
     <a href="/settings" class="<%= (typeof active !== 'undefined' && active === 'settings') ? 'active' : '' %>">
       <i class="fa-solid fa-gear"></i><span>Settings</span>
     </a>
+    <button type="button" id="sidebar-open-about">
+      <i class="fa-solid fa-circle-info"></i><span>About</span>
+    </button>
     <form class="sidebar-logout-form" method="POST" action="/logout">
       <button type="submit"><i class="fa-solid fa-right-from-bracket"></i><span>Logout</span></button>
     </form>
   </nav>
 </aside>
 
+<div class="modal-overlay" id="about-overlay">
+  <div class="modal">
+    <button class="modal-close" data-close type="button">&times;</button>
+    <h3>About VaultGate</h3>
+    <p>VaultGate is your account dashboard for managing your profile, username, email, and password in one secure place.</p>
+  </div>
+</div>
+
 <script>
   (function () {
     var toggle = document.getElementById('sidebar-toggle');
     var sidebar = document.getElementById('sidebar');
     var overlay = document.getElementById('sidebar-overlay');
+    var aboutBtn = document.getElementById('sidebar-open-about');
+    var aboutOverlay = document.getElementById('about-overlay');
     if (!toggle || !sidebar || !overlay) return;
 
     function closeSidebar() {
@@ -77,8 +90,28 @@
       link.addEventListener('click', closeSidebar);
     });
 
+    if (aboutBtn && aboutOverlay) {
+      aboutBtn.addEventListener('click', function () {
+        closeSidebar();
+        aboutOverlay.classList.add('open');
+      });
+
+      aboutOverlay.querySelectorAll('[data-close]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          aboutOverlay.classList.remove('open');
+        });
+      });
+
+      aboutOverlay.addEventListener('click', function (e) {
+        if (e.target === aboutOverlay) aboutOverlay.classList.remove('open');
+      });
+    }
+
     document.addEventListener('keydown', function (e) {
-      if (e.key === 'Escape') closeSidebar();
+      if (e.key === 'Escape') {
+        closeSidebar();
+        if (aboutOverlay) aboutOverlay.classList.remove('open');
+      }
     });
   })();
 </script>
