@@ -12,28 +12,6 @@
         <%- include('partials/flash') %>
 
         <div class="panel">
-          <h2>Welcome back, <%= user.name.split(' ')[0] %> 👋</h2>
-          <p class="desc">Here's a quick look at your account.</p>
-        </div>
-
-        <div class="panel balance-panel">
-          <span class="balance-label">Available balance</span>
-          <div class="balance-amount">
-            KES <%= (wallet.balance_cents / 100).toLocaleString('en-KE', { minimumFractionDigits: 2 }) %>
-          </div>
-        </div>
-
-        <div class="panel">
-          <h2>Quick actions</h2>
-          <nav class="links-grid" aria-label="Quick actions">
-            <a class="link-btn" href="/funds"><i class="fa-solid fa-wallet" aria-hidden="true"></i> Deposit / Withdraw</a>
-            <a class="link-btn" href="/community"><i class="fa-solid fa-users" aria-hidden="true"></i> Community</a>
-            <a class="link-btn" href="/assistant"><i class="fa-solid fa-robot" aria-hidden="true"></i> Assistant</a>
-            <a class="link-btn" href="/settings"><i class="fa-solid fa-gear" aria-hidden="true"></i> Account settings</a>
-          </nav>
-        </div>
-
-        <div class="panel">
           <h2>Recent transactions</h2>
           <% if (transactions.length === 0) { %>
             <p class="desc">No transactions yet. <a href="/funds">Make your first deposit</a>.</p>
