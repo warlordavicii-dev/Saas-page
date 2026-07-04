@@ -35,6 +35,12 @@
             <label for="confirmPassword">Confirm password</label>
             <input type="password" id="confirmPassword" name="confirmPassword" placeholder="Repeat your password" minlength="8" required>
           </div>
+          <div class="field checkbox-field">
+            <label class="checkbox-label">
+              <input type="checkbox" id="agreeTerms" name="agreeTerms" required>
+              <span>I agree to the <a href="/terms" target="_blank">Terms &amp; Conditions</a> and <a href="/privacy" target="_blank">Privacy Policy</a>.</span>
+            </label>
+          </div>
           <button class="btn btn-primary" type="submit" id="signup-submit">Create account</button>
         </form>
 
@@ -44,6 +50,7 @@
         </div>
       </div>
     </div>
+    <%- include('partials/footer') %>
   </div>
   <script>
     (function () {
