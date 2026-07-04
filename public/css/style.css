@@ -726,3 +726,91 @@ a:hover { text-decoration: underline; }
 @media (max-width: 480px) {
   .static-card { padding: 26px 20px; }
 }
+
+/* ---------- Funds page ---------- */
+.balance-panel {
+  text-align: center;
+}
+
+.balance-label {
+  display: block;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+
+.balance-amount {
+  font-family: 'Fraunces', serif;
+  font-size: 34px;
+  font-weight: 600;
+  color: var(--brass);
+}
+
+.funds-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 20px;
+}
+
+.funds-form .field { margin-bottom: 16px; }
+
+.funds-form select,
+.funds-form input[type="text"],
+.funds-form input[type="number"] {
+  width: 100%;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  padding: 11px 14px;
+  font-size: 14px;
+}
+
+.funds-form select:focus,
+.funds-form input:focus {
+  outline: none;
+  border-color: var(--brass-dim);
+}
+
+.tx-table-wrap { overflow-x: auto; }
+
+.tx-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13.5px;
+}
+
+.tx-table th {
+  text-align: left;
+  color: var(--muted);
+  font-weight: 500;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.tx-table td {
+  padding: 12px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.tx-type-deposit { color: #7fd88f; }
+.tx-type-withdrawal { color: #e0a95e; }
+
+.tx-status {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 12px;
+  text-transform: capitalize;
+}
+
+.tx-status-pending { background: rgba(224, 169, 94, 0.15); color: #e0a95e; }
+.tx-status-successful { background: rgba(127, 216, 143, 0.15); color: #7fd88f; }
+.tx-status-failed { background: rgba(224, 94, 94, 0.15); color: #e05e5e; }
