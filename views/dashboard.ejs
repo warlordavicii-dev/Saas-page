@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <%- include('partials/head') %>
+</head>
+<body>
+  <div class="app-shell">
+    <%- include('partials/sidebar', { active: 'dashboard' }) %>
+
+    <main class="main-content">
+      <div class="content-inner">
+        <%- include('partials/flash') %>
+
+        <div class="panel">
+          <h2>Welcome back, <%= user.name.split(' ')[0] %> 👋</h2>
+          <p class="desc">Here's a quick look at your account.</p>
+        </div>
+
+        <div class="panel balance-panel">
+          <span class="balance-label">Available balance</span>
+          <div class="balance-amount">
+            KES <%= (wallet.balance_cents / 100).toLocaleString('en-KE', { minimumFractionDigits: 2 }) %>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h2>Quick actions</h2>
+          <nav class="links-grid" aria-label="Quick actions">
+            <a class="link-btn" href="/funds"><i class="fa-solid fa-wallet" aria-hidden="true"></i> Deposit / Withdraw</a>
+            <a class="link-btn" href="/community"><i class="fa-solid fa-users" aria-hidden="true"></i> Community</a>
+            <a class="link-btn" href="/assistant"><i class="fa-solid fa-robot" aria-hidden="true"></i> Assistant</a>
+            <a class="link-btn" href="/settings"><i class="fa-solid fa-gear" aria-hidden="true"></i> Account settings</a>
+          </nav>
+        </div>
+
+        <div class="panel">
+          <h2>Recent transactions</h2>
+          <% if (transactions.length === 0) { %>
+            <p class="desc">No transactions yet. <a href="/funds">Make your first deposit</a>.</p>
+          <% } else { %>
+            <div class="tx-table-wrap">
+              <table class="tx-table">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Type</th>
+                    <th>Channel</th>
+                    <th>Amount</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <% transactions.forEach(function (tx) { %>
+                    <tr>
+                      <td><%= new Date(tx.created_at).toLocaleString('en-KE', { dateStyle: 'medium', timeStyle: 'short' }) %></td>
+                      <td class="tx-type-<%= tx.type %>"><%= tx.type === 'deposit' ? 'Deposit' : 'Withdrawal' %></td>
+                      <td><%= tx.channel.toUpperCase() %></td>
+                      <td>KES <%= (tx.amount_cents / 100).toLocaleString('en-KE', { minimumFractionDigits: 2 }) %></td>
+                      <td><span class="tx-status tx-status-<%= tx.status %>"><%= tx.status %></span></td>
+                    </tr>
+                  <% }); %>
+                </tbody>
+              </table>
+            </div>
+            <p class="desc" style="margin-top:14px;"><a href="/funds">View all transactions →</a></p>
+          <% } %>
+        </div>
+      </div>
+    </main>
+  </div>
+</body>
+</html>
