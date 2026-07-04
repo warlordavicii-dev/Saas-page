@@ -13,17 +13,29 @@
     <main class="main-content">
     <div class="content-inner">
 
-    <div class="settings-header" style="justify-content:flex-end;">
-      <div class="menu-wrap">
-        <button class="menu-btn" id="menu-btn" aria-label="Open menu" aria-haspopup="true" aria-expanded="false">&#8942;</button>
-        <div class="dropdown" id="dropdown">
-          <button id="open-about" type="button">About</button>
-          <button id="open-settings" type="button">Settings</button>
-        </div>
+    <%- include('partials/flash') %>
+
+    <div class="panel">
+      <h2>Welcome back, <%= user.name.split(' ')[0] %> 👋</h2>
+      <p class="desc">Here's a quick look at your account.</p>
+    </div>
+
+    <div class="panel balance-panel">
+      <span class="balance-label">Available balance</span>
+      <div class="balance-amount">
+        KES <%= ((typeof walletBalance !== 'undefined' ? walletBalance : 0) / 100).toLocaleString('en-KE', { minimumFractionDigits: 2 }) %>
       </div>
     </div>
 
-    <%- include('partials/flash') %>
+    <div class="panel">
+      <h2>Quick actions</h2>
+      <nav class="links-grid" aria-label="Quick actions">
+        <a class="link-btn" href="/funds"><i class="fa-solid fa-wallet" aria-hidden="true"></i> Deposit / Withdraw</a>
+        <a class="link-btn" href="/community"><i class="fa-solid fa-users" aria-hidden="true"></i> Community</a>
+        <a class="link-btn" href="/assistant"><i class="fa-solid fa-robot" aria-hidden="true"></i> Assistant</a>
+        <a class="link-btn" href="/dashboard"><i class="fa-solid fa-house" aria-hidden="true"></i> Dashboard</a>
+      </nav>
+    </div>
 
     <div class="panel" id="appearance-panel">
       <h2>Appearance</h2>
@@ -160,63 +172,5 @@
     </main>
   </div>
 
-  <div class="modal-overlay" id="about-overlay">
-    <div class="modal">
-      <button class="modal-close" data-close type="button">&times;</button>
-      <h3>About VaultGate</h3>
-      <p>VaultGate is your account dashboard for managing your profile, username, email, and password in one secure place.</p>
-    </div>
-  </div>
-
-  <script>
-    (function () {
-      const menuBtn = document.getElementById('menu-btn');
-      const dropdown = document.getElementById('dropdown');
-      const aboutOverlay = document.getElementById('about-overlay');
-      const profilePanel = document.getElementById('profile-panel');
-
-      function closeDropdown() {
-        dropdown.classList.remove('open');
-        menuBtn.setAttribute('aria-expanded', 'false');
-      }
-
-      menuBtn.addEventListener('click', function (e) {
-        e.stopPropagation();
-        const isOpen = dropdown.classList.toggle('open');
-        menuBtn.setAttribute('aria-expanded', String(isOpen));
-      });
-
-      document.addEventListener('click', function (e) {
-        if (!dropdown.contains(e.target) && e.target !== menuBtn) closeDropdown();
-      });
-
-      document.getElementById('open-about').addEventListener('click', function () {
-        closeDropdown();
-        aboutOverlay.classList.add('open');
-      });
-
-      document.getElementById('open-settings').addEventListener('click', function () {
-        closeDropdown();
-        profilePanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      });
-
-      document.querySelectorAll('[data-close]').forEach(function (btn) {
-        btn.addEventListener('click', function () {
-          aboutOverlay.classList.remove('open');
-        });
-      });
-
-      aboutOverlay.addEventListener('click', function (e) {
-        if (e.target === aboutOverlay) aboutOverlay.classList.remove('open');
-      });
-
-      document.addEventListener('keydown', function (e) {
-        if (e.key === 'Escape') {
-          aboutOverlay.classList.remove('open');
-          closeDropdown();
-        }
-      });
-    })();
-  </script>
 </body>
 </html>
