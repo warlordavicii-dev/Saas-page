@@ -10,6 +10,10 @@ const pool = mysql.createPool({
   waitForConnections: true,
   connectionLimit: 5,
   queueLimit: 0,
+  // utf8mb4 end-to-end so 4-byte characters (emoji included) survive the
+  // round trip — the table charset alone isn't enough if the connection
+  // itself negotiates a narrower charset.
+  charset: 'utf8mb4',
   // Treat all DATETIME columns as UTC on both read and write, regardless of
   // whatever timezone the DB host's own clock happens to be set to.
   timezone: 'Z',
