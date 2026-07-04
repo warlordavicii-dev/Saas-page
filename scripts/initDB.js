@@ -23,6 +23,38 @@ CREATE TABLE IF NOT EXISTS users (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 `;
 
+// Balances are stored as integer cents (KES * 100) to avoid floating-point
+// rounding errors with real money.
+const createWalletsTable = `
+CREATE TABLE IF NOT EXISTS wallets (
+  user_id INT PRIMARY KEY,
+  balance_cents BIGINT NOT NULL DEFAULT 0,
+  currency VARCHAR(3) NOT NULL DEFAULT 'KES',
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT fk_wallets_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+`;
+
+const createTransactionsTable = `
+CREATE TABLE IF NOT EXISTS transactions (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  user_id INT NOT NULL,
+  type ENUM('deposit', 'withdrawal') NOT NULL,
+  channel ENUM('mpesa', 'airtel', 'bank', 'card') NOT NULL,
+  amount_cents BIGINT NOT NULL,
+  currency VARCHAR(3) NOT NULL DEFAULT 'KES',
+  status ENUM('pending', 'successful', 'failed') NOT NULL DEFAULT 'pending',
+  tx_ref VARCHAR(64) NOT NULL UNIQUE,
+  flw_transaction_id VARCHAR(64) NULL,
+  destination VARCHAR(190) NULL,
+  failure_reason VARCHAR(255) NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT fk_transactions_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  INDEX idx_transactions_user (user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+`;
+
 // Adds the username column for anyone who already has this table from
 // before username support existed. Older MySQL builds (like many free
 // hosts) don't support "ADD COLUMN IF NOT EXISTS", so we check first.
@@ -50,7 +82,9 @@ async function ensureUsernameColumn() {
     console.log('Connecting to database...');
     await pool.query(createUsersTable);
     await ensureUsernameColumn();
-    console.log('✔ users table is ready.');
+    await pool.query(createWalletsTable);
+    await pool.query(createTransactionsTable);
+    console.log('✔ users, wallets, and transactions tables are ready.');
     process.exit(0);
   } catch (err) {
     console.error('✘ Failed to initialize database:', err.message);
