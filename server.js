@@ -10,6 +10,7 @@ const authRoutes = require('./routes/auth');
 const settingsRoutes = require('./routes/settings');
 const fundsRoutes = require('./routes/funds');
 const communityRoutes = require('./routes/community');
+const assistantRoutes = require('./routes/assistant');
 
 const app = express();
 
@@ -23,13 +24,17 @@ app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'public')));
 
 // connect-flash needs a session; a lightweight in-memory session is fine here
-// since auth itself is handled by the JWT cookie, not this session.
+// since auth itself is handled by the JWT cookie, not this session. We also
+// use it to hold the assistant's short conversation history, so the cookie
+// lifetime needs to comfortably outlast a normal chat — "rolling" renews it
+// on every request instead of counting down from login.
 app.use(
   session({
     secret: process.env.JWT_SECRET || 'fallback_flash_secret',
     resave: false,
     saveUninitialized: false,
-    cookie: { secure: process.env.NODE_ENV === 'production', maxAge: 5 * 60 * 1000 }
+    rolling: true,
+    cookie: { secure: process.env.NODE_ENV === 'production', maxAge: 2 * 60 * 60 * 1000 }
   })
 );
 app.use(flash());
@@ -60,6 +65,7 @@ app.use('/', authRoutes);
 app.use('/', settingsRoutes);
 app.use('/', fundsRoutes);
 app.use('/', communityRoutes);
+app.use('/', assistantRoutes);
 
 // 404
 app.use((req, res) => {
