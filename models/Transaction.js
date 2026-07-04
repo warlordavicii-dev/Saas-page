@@ -14,10 +14,10 @@ const Transaction = {
     return rows[0] || null;
   },
 
-  async markSuccessful(txRef, flwTransactionId) {
+  async markSuccessful(txRef, providerTransactionId) {
     await pool.query(
-      `UPDATE transactions SET status = 'successful', flw_transaction_id = ? WHERE tx_ref = ? AND status = 'pending'`,
-      [flwTransactionId, txRef]
+      `UPDATE transactions SET status = 'successful', provider_transaction_id = ? WHERE tx_ref = ? AND status = 'pending'`,
+      [providerTransactionId, txRef]
     );
   },
 
