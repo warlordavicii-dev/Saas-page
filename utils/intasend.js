@@ -1,6 +1,24 @@
+// services/intasend.js
+
+// Uncomment if using Node < 18
+// const fetch = require('node-fetch');
+
 const IS_LIVE_BASE = 'https://api.intasend.com/api/v1';
 const IS_TEST_BASE = 'https://sandbox.intasend.com/api/v1';
-const IS_BASE = process.env.INTASEND_TEST_MODE === 'true' ? IS_TEST_BASE : IS_LIVE_BASE;
+
+const IS_BASE =
+  process.env.INTASEND_TEST_MODE === 'true'
+    ? IS_TEST_BASE
+    : IS_LIVE_BASE;
+
+function requireEnv(name) {
+  if (!process.env[name]) {
+    throw new Error(`Missing environment variable: ${name}`);
+  }
+  return process.env[name];
+}
+
+requireEnv('INTASEND_SECRET_KEY');
 
 function authHeaders() {
   return {
@@ -9,122 +27,194 @@ function authHeaders() {
   };
 }
 
-/**
- * Initiates an M-Pesa STK push directly to the customer's phone.
- * api_ref carries our internal tx_ref so we can match it up later via
- * the payment-status check or the collection webhook.
- */
-async function chargeMpesaSTK({ txRef, amount, phoneNumber }) {
-  const res = await fetch(`${IS_BASE}/payment/mpesa-stk-push/`, {
-    method: 'POST',
-    headers: authHeaders(),
-    body: JSON.stringify({
-      amount,
-      phone_number: phoneNumber,
-      api_ref: txRef
-    })
-  });
-  const data = await res.json();
-  if (!res.ok) {
-    throw new Error(data.detail || data.message || 'Failed to initiate M-Pesa STK push');
+function normalizePhone(phone) {
+  if (!phone) {
+    throw new Error('Phone number is required');
   }
+
+  phone = String(phone).replace(/\D/g, '');
+
+  if (phone.startsWith('0')) {
+    return `254${phone.substring(1)}`;
+  }
+
+  if (phone.startsWith('254')) {
+    return phone;
+  }
+
+  throw new Error(
+    'Invalid phone number format. Use Kenyan mobile numbers only.'
+  );
+}
+
+async function parseResponse(res) {
+  let data;
+
+  try {
+    data = await res.json();
+  } catch {
+    throw new Error(
+      `IntaSend returned invalid JSON (${res.status})`
+    );
+  }
+
+  if (!res.ok) {
+    throw new Error(
+      data.detail ||
+      data.message ||
+      data.error ||
+      JSON.stringify(data)
+    );
+  }
+
   return data;
 }
 
 /**
- * Creates a hosted checkout link for card / bank (PesaLink) deposits.
- * We leave `method` unset so IntaSend shows the customer all enabled
- * payment options on the hosted page.
+ * Initiate M-Pesa STK Push
  */
-async function createHostedCheckout({ txRef, amount, email, name, redirectUrl }) {
-  const parts = (name || 'Customer').trim().split(/\s+/);
+async function chargeMpesaSTK({
+  txRef,
+  amount,
+  phoneNumber,
+  email = 'customer@example.com',
+  firstName = 'Customer',
+  lastName = 'User'
+}) {
+  const res = await fetch(
+    `${IS_BASE}/payment/mpesa-stk-push/`,
+    {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({
+        amount: Number(amount),
+        phone_number: normalizePhone(phoneNumber),
+        email,
+        first_name: firstName,
+        last_name: lastName,
+        api_ref: txRef
+      })
+    }
+  );
+
+  return parseResponse(res);
+}
+
+/**
+ * Create hosted checkout
+ */
+async function createHostedCheckout({
+  txRef,
+  amount,
+  email,
+  name,
+  redirectUrl
+}) {
+  const parts = (name || 'Customer')
+    .trim()
+    .split(/\s+/);
+
   const firstName = parts[0];
-  const lastName = parts.slice(1).join(' ') || parts[0];
+  const lastName =
+    parts.slice(1).join(' ') || parts[0];
 
-  const res = await fetch(`${IS_BASE}/checkout/`, {
-    method: 'POST',
-    headers: authHeaders(),
-    body: JSON.stringify({
-      first_name: firstName,
-      last_name: lastName,
-      email,
-      host: process.env.APP_URL,
-      amount,
-      currency: 'KES',
-      api_ref: txRef,
-      redirect_url: redirectUrl,
-      channel: 'WEBSITE'
-    })
-  });
-  const data = await res.json();
-  if (!res.ok) {
-    throw new Error(data.detail || data.message || 'Failed to create checkout link');
-  }
-  return data;
+  const res = await fetch(
+    `${IS_BASE}/checkout/`,
+    {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({
+        first_name: firstName,
+        last_name: lastName,
+        email,
+        host: process.env.APP_URL,
+        amount: Number(amount),
+        currency: 'KES',
+        api_ref: txRef,
+        redirect_url: redirectUrl,
+        channel: 'WEBSITE'
+      })
+    }
+  );
+
+  return parseResponse(res);
 }
 
 /**
- * Always re-verify a transaction server-side using IntaSend's own record
- * before crediting a wallet. Never trust the webhook payload or a client
- * redirect alone — both can be spoofed or replayed.
+ * Verify payment using invoice ID
  */
 async function verifyPayment(invoiceId) {
-  const res = await fetch(`${IS_BASE}/payment/status/`, {
-    method: 'POST',
-    headers: authHeaders(),
-    body: JSON.stringify({ invoice_id: invoiceId })
-  });
-  const data = await res.json();
-  if (!res.ok) {
-    throw new Error(data.detail || data.message || 'Failed to verify payment');
+  if (!invoiceId) {
+    throw new Error('invoiceId is required');
   }
-  // IntaSend nests the record under `invoice` on some accounts and returns
-  // it flat on others — normalize so callers don't have to care.
+
+  const res = await fetch(
+    `${IS_BASE}/payment/status/`,
+    {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({
+        invoice_id: invoiceId
+      })
+    }
+  );
+
+  const data = await parseResponse(res);
+
   return data.invoice || data;
 }
 
 /**
- * Initiates a payout (withdrawal) to M-Pesa or a Kenyan bank account via
- * PesaLink. requires_approval is 'NO' so it's a single straight-through
- * call, matching how this app previously used Flutterwave transfers.
- * We stamp our tx_ref onto idempotency_key so the send-money webhook can
- * match the result back to the right transaction.
+ * Initiate withdrawal
  */
-async function initiateTransfer({ txRef, amount, channel, accountNumber, bankCode, beneficiaryName }) {
-  const provider = channel === 'bank' ? 'PESALINK' : 'MPESA-B2C';
+async function initiateTransfer({
+  txRef,
+  amount,
+  channel,
+  accountNumber,
+  bankCode,
+  beneficiaryName
+}) {
+  const provider =
+    channel === 'bank'
+      ? 'PESALINK'
+      : 'MPESA-B2C';
 
   const transaction = {
     name: beneficiaryName,
     account: accountNumber,
-    amount,
+    amount: Number(amount),
     narrative: 'VaultGate withdrawal',
     idempotency_key: txRef
   };
+
   if (provider === 'PESALINK') {
     transaction.bank_code = bankCode;
   }
 
-  const res = await fetch(`${IS_BASE}/send-money/initiate/`, {
-    method: 'POST',
-    headers: authHeaders(),
-    body: JSON.stringify({
-      currency: 'KES',
-      provider,
-      requires_approval: 'NO',
-      callback_url: `${process.env.APP_URL}/webhooks/intasend`,
-      transactions: [transaction]
-    })
-  });
-  const data = await res.json();
-  if (!res.ok) {
-    throw new Error(data.detail || data.message || 'Failed to initiate withdrawal');
-  }
-  return data;
+  const res = await fetch(
+    `${IS_BASE}/send-money/initiate/`,
+    {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({
+        currency: 'KES',
+        provider,
+        requires_approval: 'NO',
+        callback_url:
+          `${process.env.APP_URL}/webhooks/intasend`,
+        transactions: [transaction]
+      })
+    }
+  );
+
+  return parseResponse(res);
 }
 
 module.exports = {
   chargeMpesaSTK,
   createHostedCheckout,
   verifyPayment,
-  initiateTransfer
+  initiateTransfer,
+  normalizePhone
 };
